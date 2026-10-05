@@ -7,16 +7,19 @@
     "test": "deno test --allow-read=.,../frontend/src/contracts --allow-env --coverage=coverage",
     "coverage": "deno coverage coverage --lcov --output=coverage/lcov.info",
     "fmt": "deno fmt",
-    "lint": "deno lint"
+    "lint": "deno lint",
+    "gen:matrix": "deno run --allow-read=. --allow-write=supabase/tests scripts/gen_permission_matrix.ts",
+    "seed:dev": "env -u DOCKER_HOST -u DOCKER_CONTEXT docker --context default exec -i supabase_db_backend psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seed.dev.sql",
+    "test:seed-dev": "supabase test db supabase/tests-dev/a22_seed_fixtures_test.sql supabase/tests-dev/a22_seed_guard_test.sql"
   },
   "fmt": {
-    "include": ["contracts/", "supabase/functions/"],
+    "include": ["contracts/", "supabase/functions/", "scripts/"],
     "exclude": ["contracts/video.ts"],
     "lineWidth": 100,
     "singleQuote": true
   },
   "lint": {
-    "include": ["contracts/", "supabase/functions/"]
+    "include": ["contracts/", "supabase/functions/", "scripts/"]
   },
   "compilerOptions": {
     "strict": true,
