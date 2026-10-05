@@ -126,6 +126,31 @@ describe('LoginPage', () => {
     expect(await screen.findByText('My courses page')).toBeInTheDocument()
   })
 
+  it.each(['//evil.example.com', 'https://evil.example.com/x', '/\\evil.example.com', 'javascript:alert(1)', ''])(
+    'falls back to / when state.from.pathname is not a local path (%s)',
+    async (pathname) => {
+      const user = userEvent.setup()
+      const authValue = buildAuthValue({ signIn: vi.fn().mockResolvedValue({ error: null }) })
+      render(
+        <AnalyticsContext.Provider value={buildAnalyticsValue()}>
+          <AuthContext.Provider value={authValue}>
+            <MemoryRouter initialEntries={[{ pathname: '/login', state: { from: { pathname } } }]}>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/" element={<p>Home page</p>} />
+                <Route path="*" element={<p>Wrong destination</p>} />
+              </Routes>
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </AnalyticsContext.Provider>,
+      )
+      await user.type(screen.getByLabelText(/e-mail/i), 'user@example.com')
+      await user.type(screen.getByLabelText(/senha/i), 'secret123')
+      await user.click(screen.getByRole('button', { name: /entrar/i }))
+      expect(await screen.findByText('Home page')).toBeInTheDocument()
+    },
+  )
+
   it('shows a friendly error message and does not navigate when signIn fails', async () => {
     const user = userEvent.setup()
     const authValue = buildAuthValue({

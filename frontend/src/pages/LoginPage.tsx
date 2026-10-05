@@ -8,6 +8,14 @@ import { useAnalytics } from '../features/analytics/useAnalytics'
 import { useAuth } from '../features/auth/useAuth'
 import { isValidEmail } from '../lib/validators'
 
+// Só caminhos locais (um "/" não seguido de "/" ou "\\"): evita open redirect.
+const LOCAL_PATH = /^\/(?![/\\])/
+const DEFAULT_DESTINATION = '/'
+
+function safeDestination(pathname: string | undefined): string {
+  return pathname !== undefined && LOCAL_PATH.test(pathname) ? pathname : DEFAULT_DESTINATION
+}
+
 interface FieldErrors {
   readonly email?: string
   readonly password?: string
@@ -61,7 +69,7 @@ export function LoginPage() {
 
     capture('login_completed')
     const state = location.state as RedirectLocationState | null
-    navigate(state?.from?.pathname ?? '/', { replace: true })
+    navigate(safeDestination(state?.from?.pathname), { replace: true })
   }
 
   return (
