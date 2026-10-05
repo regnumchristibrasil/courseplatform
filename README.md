@@ -140,7 +140,7 @@ npm run test:e2e
 
 Playwright inicia um dev server na porta 5199 automaticamente. Variáveis de env para E2E
 (definidas em `frontend/playwright.config.ts`):
-- `E2E_DB_CONTAINER`: container name do Postgres (default: `supabase-db`)
+- `E2E_DB_CONTAINER`: container name do Postgres (default: `supabase_db_backend`)
 - `E2E_PORT`: porta da API local (default: 54321)
 - `E2E_FIXTURE_PASSWORD`: senha dos fixtures (default: igual em `seed.dev.sql`)
 
@@ -232,17 +232,51 @@ implementação).
 
 ### Primeiro superadmin (pós-deploy em produção)
 
-Após aplicar as migrations A18-A21 e rodar o backfill:
-```bash
-cd backend
-# Aplica A18-A21
-supabase db reset  # ou supabase db push se apenas novas migrations
-# Backfill obrigatório
-psql "$DATABASE_URL" -c "select app_private.backfill_user_access();"
-```
+Executado uma única vez, por um operador com papel dono do schema (`postgres`).
+**Nunca use `supabase db reset` em produção** (apaga todos os dados).
 
-Pessoa cria conta normalmente (signup), e operador roda `backend/supabase/runbooks/bootstrap_superadmin.sql`
-(veja o arquivo para instruções de segurança: confirm identidade OOB antes de rodar).
+1. Aplique as migrations A18-A21:
+   ```bash
+   cd backend
+   supabase db push
+   ```
+   A migration A18 já executa `app_private.backfill_user_access()` (idempotente: toda conta
+   sem papel vira `student` ativo). Não é preciso rodá-lo à mão.
+
+2. A pessoa cria a conta normalmente (signup ou convite) e confirma o e-mail.
+
+3. Leia o `user_id` e confirme a identidade fora de banda (contato direto, datas de
+   criação e confirmação coerentes). O cadastro é aberto, então qualquer pessoa pode ter
+   pré-registrado o e-mail:
+   ```bash
+   psql "$DATABASE_URL" -c "select id, email, email_confirmed_at, banned_until, deleted_at, created_at
+     from auth.users where lower(email) = lower('<email>');"
+   ```
+
+4. Edite `backend/supabase/runbooks/bootstrap_superadmin.sql` e preencha os DOIS valores,
+   nas linhas marcadas `EDITAR AQUI`: o e-mail e o `user_id` lido no passo anterior.
+   Não commite o arquivo editado.
+
+5. Rode o script. Ele executa em uma única transação e, se qualquer verificação falhar
+   (e-mail inexistente ou não confirmado, `user_id` divergente, conta banida ou removida,
+   já é superadmin ativo), levanta exceção e nada é gravado:
+   ```bash
+   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/runbooks/bootstrap_superadmin.sql
+   ```
+   Em caso de dúvida antes do `commit`, troque-o por `rollback`.
+
+6. Verifique o resultado:
+   ```bash
+   psql "$DATABASE_URL" -c "select user_id, role, is_active from app_private.user_access
+     where role = 'superadmin';"
+   psql "$DATABASE_URL" -c "select actor_id, target_id, action, old_value, new_value, reason
+     from app_private.user_access_audit order by id desc limit 1;"
+   ```
+   Deve existir uma linha `superadmin` ativa e uma auditoria `role_changed` com o motivo
+   `bootstrap do primeiro superadmin`.
+
+7. Restaure o arquivo do runbook (`git checkout -- backend/supabase/runbooks/bootstrap_superadmin.sql`).
+   A partir daqui, admins e superadmins são geridos pela tela `/admin/users`, nunca por SQL manual.
 
 ### Desenvolvimento local com admin
 
@@ -343,8 +377,6 @@ Há um teste de paridade (`backend/contracts/adminUsers.parity.test.ts`) que fal
   falharem no boot local -- `loadBackendConfig()` valida todas as
   variáveis de uma vez e lista tudo que estiver faltando ou inválido em um
   único erro.
-- O repositório ainda não tem `.git` inicializado (escolha deliberada, ver
-  `PROGRESS.md`) -- nenhum dos comandos acima depende de git.
 
 ## O que este README não cobre
 
