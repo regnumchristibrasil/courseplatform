@@ -394,3 +394,29 @@ Deno.test('handleVideoResolve error envelopes always include a requestId', async
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   );
 });
+
+// ADR 0001, decision 5: for a deactivated user app.get_playable_ref returns
+// zero rows (gate lives in SQL, see a21 pgTAP). The function must answer
+// exactly like "not entitled" and never resolve a video.
+Deno.test('handleVideoResolve denies a deactivated user (zero rows from the RPC) with the same 403 not_entitled and never resolves a video', async () => {
+  const { client, rpcCalls } = createFakeSupabase({
+    rpcResponse: { data: [], error: null },
+    authResponse: { data: { user: { id: 'deactivated-user' } }, error: null },
+  });
+  let resolveCalls = 0;
+  const resolveVideoFn = (() => {
+    resolveCalls += 1;
+    return Promise.reject(new Error('must not be called'));
+  }) as unknown as typeof import('../_shared/video/registry.ts').resolveVideo;
+
+  const response = await handleVideoResolve(
+    postRequest({ lessonId: LESSON_ID }),
+    baseDeps({ createCallerClientFn: fakeCreateCallerClientFn(client), resolveVideoFn }),
+  );
+
+  assertEquals(response.status, 403);
+  assertEquals((await response.json()).error.code, 'not_entitled');
+  assertEquals(resolveCalls, 0);
+  assertEquals(rpcCalls.length, 1);
+  assertEquals(rpcCalls[0]?.fn, 'get_playable_ref');
+});

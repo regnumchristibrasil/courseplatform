@@ -65,11 +65,25 @@ function sampleCharge(overrides: Partial<PixCharge> = {}): PixCharge {
   };
 }
 
+interface FakeAccess {
+  readonly rows?: readonly { role: string; is_active: boolean }[];
+  readonly error?: { message: string };
+}
+
 function fakeCallerClient(
   user: { id: string; email?: string } | null,
   errorMessage?: string,
+  access: FakeAccess = { rows: [{ role: 'student', is_active: true }] },
 ): SupabaseClient {
   return {
+    schema: (schemaName: string) => ({
+      rpc: (fn: string) => {
+        if (schemaName !== 'app' || fn !== 'current_access') {
+          throw new Error(`unexpected rpc ${schemaName}.${fn}`);
+        }
+        return Promise.resolve({ data: access.rows ?? [], error: access.error ?? null });
+      },
+    }),
     auth: {
       getUser: () =>
         Promise.resolve(
@@ -554,4 +568,59 @@ Deno.test('handleCheckoutRequest rethrows an unexpected error from createCallerC
     assertEquals(error, boomError);
   }
   assertEquals(rejected, true);
+});
+
+Deno.test('handleCheckoutRequest rejects a deactivated user with 403 forbidden before touching the service-role client', async () => {
+  const provider = fakePaymentProvider(() => Promise.resolve(sampleCharge()));
+  const response = await handleCheckoutRequest(buildRequest({ courseId: 'course-1' }), {
+    config: sampleConfig(),
+    createCallerClient: () =>
+      fakeCallerClient({ id: 'user-1', email: 'buyer@example.com' }, undefined, {
+        rows: [{ role: 'student', is_active: false }],
+      }),
+    createServiceRoleClient: serviceClientNeverCalled,
+    paymentProvider: provider.provider,
+    captureAndFlush: fakeCapture().fn,
+    captureExceptionAndFlush: fakeCaptureException().fn,
+  });
+  assertEquals(response.status, 403);
+  const json = await response.json();
+  assertEquals(json.error.code, 'forbidden');
+  assertMatch(json.error.requestId, REQUEST_ID_PATTERN);
+  assertEquals(provider.calls.length, 0);
+});
+
+Deno.test('handleCheckoutRequest fails closed with 500 internal_error when the access lookup errors', async () => {
+  const exceptions = fakeCaptureException();
+  const response = await handleCheckoutRequest(buildRequest({ courseId: 'course-1' }), {
+    config: sampleConfig(),
+    createCallerClient: () =>
+      fakeCallerClient({ id: 'user-1', email: 'buyer@example.com' }, undefined, {
+        error: { message: 'boom' },
+      }),
+    createServiceRoleClient: serviceClientNeverCalled,
+    paymentProvider: fakePaymentProvider(() => Promise.resolve(sampleCharge())).provider,
+    captureAndFlush: fakeCapture().fn,
+    captureExceptionAndFlush: exceptions.fn,
+  });
+  assertEquals(response.status, 500);
+  const json = await response.json();
+  assertEquals(json.error.code, 'internal_error');
+  assertEquals(exceptions.calls.length, 1);
+});
+
+Deno.test('handleCheckoutRequest treats a user without a user_access row as active (unchanged behaviour)', async () => {
+  const { client: serviceClient } = createFakeClient({
+    courses: { select: { data: null, error: null } },
+  });
+  const response = await handleCheckoutRequest(buildRequest({ courseId: 'missing-course' }), {
+    config: sampleConfig(),
+    createCallerClient: () =>
+      fakeCallerClient({ id: 'user-1', email: 'buyer@example.com' }, undefined, { rows: [] }),
+    createServiceRoleClient: () => serviceClient as unknown as SupabaseClient,
+    paymentProvider: fakePaymentProvider(() => Promise.resolve(sampleCharge())).provider,
+    captureAndFlush: fakeCapture().fn,
+    captureExceptionAndFlush: fakeCaptureException().fn,
+  });
+  assertEquals(response.status, 404);
 });
