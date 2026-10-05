@@ -1,6 +1,7 @@
 import posthog from 'posthog-js'
 import { describe, expect, it, vi } from 'vitest'
 import { capturePostHogEvent, initPostHogClient } from './posthogClient'
+import { sanitizeCaptureResult } from './sanitizeAnalytics'
 
 vi.mock('posthog-js', () => ({
   default: {
@@ -20,6 +21,16 @@ describe('initPostHogClient', () => {
         autocapture: true,
         capture_pageview: true,
       }),
+    )
+  })
+})
+
+describe('initPostHogClient privacy', () => {
+  it('registers the sanitizer as before_send', () => {
+    initPostHogClient({ apiKey: 'phc_test', apiHost: 'https://us.i.posthog.com' })
+    expect(posthog.init).toHaveBeenLastCalledWith(
+      'phc_test',
+      expect.objectContaining({ before_send: sanitizeCaptureResult }),
     )
   })
 })
