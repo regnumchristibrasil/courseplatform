@@ -99,6 +99,10 @@ Design Postgres tables (with RLS policies) for at least:
   `AFTER INSERT ON auth.users` trigger). Do not put a role/admin flag on
   this table — a self-UPDATE policy plus a role column is a self-promotion
   vulnerability; roles belong in a separate, client-write-free table.
+  [Amended, ADR 0001] That table is `app_private.user_access`: exactly one
+  role per user (`student` row explicit), hierarchy
+  superadmin > admin > tutor > student, plus an `is_active` flag and an
+  append-only audit table.
 - `courses` (title, description, `price_cents integer`, status,
   `access_duration_days integer` nullable) — public SELECT where
   `status = 'published'`, no client writes. Money is represented as integer
@@ -415,6 +419,11 @@ app.enqueue_email(p_template text, p_to_email text, p_payload jsonb, p_dedup_key
   RETURNS uuid  -- p_dedup_key UNIQUE, e.g. 'purchase_confirmation:<order_id>'
 ```
 
+[Amended, ADR 0001] Admin user management RPCs (SECURITY DEFINER, actor
+from `auth.uid()`): `app.admin_list_users`, `app.admin_set_user_role`,
+`app.admin_set_user_active` (optional reason <= 500 chars).
+`app.has_active_enrollment` additionally requires the user `is_active`.
+
 ### Edge Function HTTP contracts (frozen)
 
 All `POST ${SUPABASE_URL}/functions/v1/<name>`. Shared error envelope:
@@ -427,10 +436,14 @@ All `POST ${SUPABASE_URL}/functions/v1/<name>`. Shared error envelope:
 | `payments-reconcile` | false + `X-Cron-Secret` | `{ limit? }` | `{ scanned, confirmed, expired, failed }` |
 | `video-resolve` | true, caller-JWT client only | `{ lessonId }` | `{ lessonId, video: ResolvedVideo }` |
 | `outbox-drain` | false + `X-Cron-Secret` | `{ limit? }` | `{ picked, sent, failed, deadLettered }` |
+| `admin-users` [ADR 0001] | true | `set_active` only: deactivation (RPC first, then Auth ban) | `{ userId, isActive }`; 502 `auth_sync_failed` on Auth failure |
 
 `checkout` rule: if a non-expired `pending` order already exists for
 `(user, course)`, return its existing charge instead of creating a second
 one — prevents duplicate charges on double-click.
+
+`checkout` error codes: `unauthorized`, `payment_provider_error`, `course_not_found`,
+`invalid_body`, `internal_error`, `forbidden` [ADR 0001 — returned if user inactive].
 
 ### RLS access matrix (frozen — this is the RLS policy test suite's spec)
 
@@ -444,6 +457,7 @@ one — prevents duplicate charges on double-click.
 | `app_private.lesson_assets` | – | – | – | all |
 | `app_private.payment_events` | – | – | – | all |
 | `app_private.email_outbox` | – | – | – | all |
+| `app_private.user_access` / admin audit [ADR 0001] | – | – | – | all |
 
 `–` = denied, including writes — no client INSERT/UPDATE/DELETE exists
 anywhere in this table; the test suite must assert that explicitly per
@@ -497,6 +511,9 @@ standard component styling; this is optional, not a blocker.
    Course/lesson authoring, manual enrollment grants, and refund processing
    have no dedicated admin UI in this scope — MVP admin is the Supabase SQL
    console, as a deliberate deferred-scope decision, not an oversight.
+   [Amended, ADR 0001] Exception: user management (list, role change,
+   deactivate/reactivate) has an `/admin` UI (404 for non-staff), covered
+   by Playwright E2E.
 3. `.env.example` files (frontend and Edge Functions) listing every required
    environment variable/secret, without real values.
 4. A short `README.md` explaining how to run the project locally, how to
