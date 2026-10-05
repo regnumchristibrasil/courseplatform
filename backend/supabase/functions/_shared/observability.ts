@@ -25,6 +25,9 @@ export type ServerEventName =
   | 'payment_webhook_failed'
   | 'video_resolved'
   | 'video_resolve_denied'
+  | 'admin_user_status_changed'
+  | 'admin_user_status_sync_failed'
+  | 'admin_action_denied'
   | 'email_sent'
   | 'email_dead_lettered'
   | 'reconcile_tick';
