@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import { supabase as defaultSupabaseClient } from '../../lib/supabaseClient'
 import { AuthContext, type AuthContextValue, type AuthResult } from './AuthContext'
@@ -14,6 +15,21 @@ export interface AuthProviderProps {
 export function AuthProvider({ children, client = defaultSupabaseClient }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const lastUserIdRef = useRef<string | null>(null)
+
+  // Único ponto de limpeza do cache: tudo em cache (papel, lista de usuários
+  // com PII) pertence ao usuário anterior. Idempotente por id, então
+  // signOut + evento SIGNED_OUT limpam uma unica vez.
+  const syncUserId = useCallback(
+    (nextUserId: string | null) => {
+      if (nextUserId !== lastUserIdRef.current) {
+        queryClient.clear()
+      }
+      lastUserIdRef.current = nextUserId
+    },
+    [queryClient],
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -25,6 +41,7 @@ export function AuthProvider({ children, client = defaultSupabaseClient }: AuthP
       if (error) {
         console.error('Failed to load the initial auth session:', error)
       }
+      lastUserIdRef.current = data.session?.user.id ?? null
       setSession(data.session ?? null)
       setIsLoading(false)
     })
@@ -35,6 +52,7 @@ export function AuthProvider({ children, client = defaultSupabaseClient }: AuthP
       if (!isMounted) {
         return
       }
+      syncUserId(nextSession?.user.id ?? null)
       setSession(nextSession)
       setIsLoading(false)
     })
@@ -43,7 +61,7 @@ export function AuthProvider({ children, client = defaultSupabaseClient }: AuthP
       isMounted = false
       subscription.unsubscribe()
     }
-  }, [client])
+  }, [client, syncUserId])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -66,10 +84,11 @@ export function AuthProvider({ children, client = defaultSupabaseClient }: AuthP
       },
       signOut: async (): Promise<AuthResult> => {
         const { error } = await client.auth.signOut()
+        syncUserId(null)
         return { error: error ? toFriendlyAuthMessage(error.message) : null }
       },
     }),
-    [session, isLoading, client],
+    [session, isLoading, client, syncUserId],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

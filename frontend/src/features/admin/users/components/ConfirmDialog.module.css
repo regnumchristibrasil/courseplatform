@@ -1,0 +1,9 @@
+.email {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.summary {
+  margin: 0 0 16px;
+}

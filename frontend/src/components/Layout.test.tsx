@@ -1,11 +1,15 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { User } from '@supabase/supabase-js'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../features/auth/AuthContext'
 import { COMPANY_NAME } from '../config/brand'
+import { fetchCurrentAccess } from '../features/authz/currentAccessApi'
 import { Layout } from './Layout'
+
+vi.mock('../features/authz/currentAccessApi', () => ({ fetchCurrentAccess: vi.fn() }))
 
 function buildAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
@@ -20,15 +24,18 @@ function buildAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContextV
 }
 
 function renderLayout(authValue: AuthContextValue) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <AuthContext.Provider value={authValue}>
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<p>Nested route content</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<p>Nested route content</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
     </AuthContext.Provider>,
   )
 }
@@ -69,5 +76,38 @@ describe('Layout', () => {
     await userInteraction.click(screen.getByRole('button', { name: /sair/i }))
 
     expect(authValue.signOut).toHaveBeenCalledTimes(1)
+  })
+
+  describe('admin link', () => {
+    beforeEach(() => vi.mocked(fetchCurrentAccess).mockReset())
+
+    const authUser = { id: 'user-1', email: 'user@example.com' } as unknown as User
+    const authed = () => buildAuthValue({ session: { user: authUser } as never, user: authUser })
+
+    it.each(['admin', 'superadmin'] as const)('shows Administração for active %s', async (role) => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role, isActive: true })
+      renderLayout(authed())
+      expect(await screen.findByRole('link', { name: 'Administração' })).toHaveAttribute('href', '/admin/users')
+    })
+
+    it.each(['student', 'tutor'] as const)('hides Administração for %s', async (role) => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role, isActive: true })
+      renderLayout(authed())
+      await vi.waitFor(() => expect(fetchCurrentAccess).toHaveBeenCalled())
+      expect(screen.queryByRole('link', { name: 'Administração' })).not.toBeInTheDocument()
+    })
+
+    it('hides Administração for an inactive admin', async () => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'admin', isActive: false })
+      renderLayout(authed())
+      await vi.waitFor(() => expect(fetchCurrentAccess).toHaveBeenCalled())
+      expect(screen.queryByRole('link', { name: 'Administração' })).not.toBeInTheDocument()
+    })
+
+    it('hides Administração and skips the access query when unauthenticated', () => {
+      renderLayout(buildAuthValue())
+      expect(screen.queryByRole('link', { name: 'Administração' })).not.toBeInTheDocument()
+      expect(fetchCurrentAccess).not.toHaveBeenCalled()
+    })
   })
 })

@@ -1,4 +1,5 @@
-import { render, renderHook, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -68,10 +69,22 @@ function AuthProbe() {
   )
 }
 
-function renderUseAuth(client: SupabaseClient) {
+function renderProbe(client: SupabaseClient, queryClient: QueryClient = new QueryClient()) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider client={client}>
+        <AuthProbe />
+      </AuthProvider>
+    </QueryClientProvider>,
+  )
+}
+
+function renderUseAuth(client: SupabaseClient, queryClient: QueryClient = new QueryClient()) {
   return renderHook(() => useAuth(), {
     wrapper: ({ children }: { children: ReactNode }) => (
-      <AuthProvider client={client}>{children}</AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider client={client}>{children}</AuthProvider>
+      </QueryClientProvider>
     ),
   })
 }
@@ -88,11 +101,7 @@ describe('AuthProvider', () => {
   it('starts in a loading state and resolves to an unauthenticated state when there is no session', async () => {
     const { client } = buildFakeSupabaseClient({ initialSession: null })
 
-    render(
-      <AuthProvider client={client}>
-        <AuthProbe />
-      </AuthProvider>,
-    )
+    renderProbe(client)
 
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
     expect(screen.getByTestId('session')).toHaveTextContent('no-session')
@@ -103,11 +112,7 @@ describe('AuthProvider', () => {
     const session = buildFakeSession()
     const { client } = buildFakeSupabaseClient({ initialSession: session })
 
-    render(
-      <AuthProvider client={client}>
-        <AuthProbe />
-      </AuthProvider>,
-    )
+    renderProbe(client)
 
     await waitFor(() => expect(screen.getByTestId('session')).toHaveTextContent('has-session'))
     expect(screen.getByTestId('user-id')).toHaveTextContent('user-1')
@@ -116,11 +121,7 @@ describe('AuthProvider', () => {
   it('updates context state when the auth state change listener fires', async () => {
     const { client, emitAuthStateChange } = buildFakeSupabaseClient({ initialSession: null })
 
-    render(
-      <AuthProvider client={client}>
-        <AuthProbe />
-      </AuthProvider>,
-    )
+    renderProbe(client)
 
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
 
@@ -134,11 +135,7 @@ describe('AuthProvider', () => {
   it('logs (never swallows) a getSession error and still settles into a safe unauthenticated state', async () => {
     const { client } = buildFakeSupabaseClient({ getSessionError: { message: 'network down' } })
 
-    render(
-      <AuthProvider client={client}>
-        <AuthProbe />
-      </AuthProvider>,
-    )
+    renderProbe(client)
 
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
     expect(screen.getByTestId('session')).toHaveTextContent('no-session')
@@ -148,11 +145,7 @@ describe('AuthProvider', () => {
   it('unsubscribes from the auth state listener on unmount', async () => {
     const { client, unsubscribe } = buildFakeSupabaseClient()
 
-    const { unmount } = render(
-      <AuthProvider client={client}>
-        <AuthProbe />
-      </AuthProvider>,
-    )
+    const { unmount } = renderProbe(client)
 
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
     unmount()
@@ -228,5 +221,87 @@ describe('AuthProvider', () => {
     } as never)
     const failureResult = await result.current.signOut()
     expect(failureResult.error).toBe('Ocorreu um erro inesperado. Tente novamente.')
+  })
+})
+
+describe('AuthProvider access cache', () => {
+  const ADMIN_LIST_KEY = ['admin', 'users', 'list', { limit: 20, offset: 0 }]
+
+  function seed(queryClient: QueryClient) {
+    queryClient.setQueryData(['me'], { role: 'admin', isActive: true })
+    queryClient.setQueryData(['me', 'user-1'], { role: 'admin', isActive: true })
+    queryClient.setQueryData(ADMIN_LIST_KEY, { users: [{ email: 'pii@example.com' }], total: 1 })
+  }
+
+  it('clears the whole cache (including the admin PII list) on signOut', async () => {
+    const { client } = buildFakeSupabaseClient({ initialSession: buildFakeSession() })
+    vi.mocked(client.auth.signOut).mockResolvedValue({ error: null })
+    const queryClient = new QueryClient()
+    const { result } = renderUseAuth(client, queryClient)
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    seed(queryClient)
+
+    await act(async () => {
+      await result.current.signOut()
+    })
+
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+  })
+
+  it('clears the whole cache when the user id changes, but not on a token refresh', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    const queryClient = new QueryClient()
+    const { result } = renderUseAuth(client, queryClient)
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    seed(queryClient)
+
+    act(() => {
+      emitAuthStateChange('TOKEN_REFRESHED', buildFakeSession())
+    })
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(3)
+
+    const other = buildFakeSession()
+    act(() => {
+      emitAuthStateChange('SIGNED_IN', { ...other, user: { ...other.user, id: 'user-2' } })
+    })
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+  })
+
+  it('clears the whole cache when the session ends', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    const queryClient = new QueryClient()
+    const { result } = renderUseAuth(client, queryClient)
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    seed(queryClient)
+
+    act(() => {
+      emitAuthStateChange('SIGNED_OUT', null)
+    })
+
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+  })
+
+  it('clears only once when signOut is followed by the SIGNED_OUT event', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    vi.mocked(client.auth.signOut).mockImplementation(async () => {
+      emitAuthStateChange('SIGNED_OUT', null)
+      return { error: null }
+    })
+    const queryClient = new QueryClient()
+    const clear = vi.spyOn(queryClient, 'clear')
+    const { result } = renderUseAuth(client, queryClient)
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await act(async () => {
+      await result.current.signOut()
+    })
+
+    expect(clear).toHaveBeenCalledTimes(1)
   })
 })
