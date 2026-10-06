@@ -17,14 +17,22 @@ export function AuthProvider({ children, client = defaultSupabaseClient }: AuthP
   const [isLoading, setIsLoading] = useState(true)
   const queryClient = useQueryClient()
   const lastUserIdRef = useRef<string | null>(null)
+  // A primeira resolução da sessão (getSession ou INITIAL_SESSION, o que vier
+  // antes) apenas hidrata o id: não é troca de usuário, e resetar o cache ali
+  // descartaria queries já em voo (ex.: catálogo) e travaria o spinner.
+  const hasHydratedRef = useRef(false)
 
   // Único ponto de limpeza do cache: tudo em cache (papel, lista de usuários
   // com PII) pertence ao usuário anterior. Idempotente por id, então
-  // signOut + evento SIGNED_OUT limpam uma unica vez.
+  // signOut + evento SIGNED_OUT resetam uma unica vez. resetQueries (e não
+  // clear) descarta os dados mas mantém as queries ativas inscritas, que são
+  // refeitas para o novo usuário.
   const syncUserId = useCallback(
     (nextUserId: string | null) => {
-      if (nextUserId !== lastUserIdRef.current) {
-        queryClient.clear()
+      const isHydration = !hasHydratedRef.current
+      hasHydratedRef.current = true
+      if (!isHydration && nextUserId !== lastUserIdRef.current) {
+        void queryClient.resetQueries()
       }
       lastUserIdRef.current = nextUserId
     },
@@ -41,7 +49,12 @@ export function AuthProvider({ children, client = defaultSupabaseClient }: AuthP
       if (error) {
         console.error('Failed to load the initial auth session:', error)
       }
-      lastUserIdRef.current = data.session?.user.id ?? null
+      // Um evento de auth já hidratou (e pode ter avançado além deste
+      // snapshot): o resultado de getSession é obsoleto, ignora.
+      if (hasHydratedRef.current) {
+        return
+      }
+      syncUserId(data.session?.user.id ?? null)
       setSession(data.session ?? null)
       setIsLoading(false)
     })
