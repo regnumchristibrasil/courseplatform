@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "proto:courses": "VITE_SUPABASE_URL=http://127.0.0.1:54321 VITE_SUPABASE_ANON_KEY=prototype-fake VITE_POSTHOG_KEY=prototype-fake VITE_POSTHOG_HOST=http://127.0.0.1:1 VITE_APP_ENV=development vite --port 5188 --strictPort --open /admin/courses",
     "build": "tsc -b && vite build",
     "lint": "oxlint $(find src e2e -type f \\( -name '*.ts' -o -name '*.tsx' \\)) playwright.config.ts",
     "preview": "vite preview",

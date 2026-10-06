@@ -1,0 +1,47 @@
+/* PROTOTYPE (throwaway) styles. Uses the app's existing tokens. */
+.page { padding: 16px 0 96px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.spacer { flex: 1; }
+.muted { color: var(--text); font-size: 13px; }
+.dim { opacity: 0.55; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.textarea { font: inherit; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.checkbox { display: flex; align-items: center; gap: 6px; align-self: flex-end; padding-bottom: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.moveButtons { display: inline-flex; gap: 2px; }
+.moveButtons button { border: 1px solid var(--border); background: var(--bg); border-radius: 4px; cursor: pointer; padding: 2px 8px; }
+.moveButtons button:disabled { opacity: 0.35; cursor: default; }
+.preview { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px dashed var(--accent-border); border-radius: 6px; background: var(--accent-bg); font-size: 13px; }
+.audit { margin: 0; padding-left: 18px; font-size: 13px; }
+
+/* Variant A */
+.splitA { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+.tree { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.treeItem { text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 4px; cursor: pointer; font: inherit; color: var(--text-h); }
+.treeItem:hover { background: var(--code-bg); }
+.selected { background: var(--accent-bg); }
+.treeModule { display: flex; flex-direction: column; margin-top: 4px; }
+.treeLesson { margin-left: 16px; font-size: 14px; }
+.treeAdd { text-align: left; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 4px 8px; }
+.treeAddModule { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.pane { border: 1px solid var(--border); border-radius: 8px; padding: 16px; min-width: 0; }
+
+/* Variant B */
+.outline { display: flex; flex-direction: column; gap: 16px; }
+.moduleSection { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.lessonList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lessonRow { border-bottom: 1px solid var(--border); padding: 6px 0; }
+.inlineEditor { margin: 8px 0 8px 16px; padding: 12px; background: var(--code-bg); border-radius: 6px; display: flex; flex-direction: column; gap: 10px; }
+.statusBar { position: fixed; left: 0; right: 0; bottom: 56px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 16px; background: var(--bg); border-top: 1px solid var(--border); box-shadow: var(--shadow); z-index: 20; }
+
+/* Variant C */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab { background: none; border: 0; padding: 8px 16px; cursor: pointer; font: inherit; color: var(--text); border-bottom: 2px solid transparent; }
+.tabActive { color: var(--text-h); border-bottom-color: var(--accent); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 400px; max-width: 100vw; overflow-y: auto; padding: 16px; background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--shadow); z-index: 20; display: flex; flex-direction: column; gap: 12px; }
+
+/* Switcher (fixed, bottom-centre, obviously not part of the design) */
+.switcher { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-radius: 999px; background: #111; color: #fff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); font-size: 14px; }
+.switcher button { background: #333; color: #fff; border: 0; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; }

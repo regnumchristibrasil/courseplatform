@@ -5,6 +5,8 @@ import { Layout } from './components/Layout'
 import { Spinner } from './components/ui/Spinner'
 import { PostHogProvider } from './features/analytics/PostHogProvider'
 import { AuthProvider } from './features/auth/AuthProvider'
+import { CourseEditorPrototype, CoursesListPrototype } from './features/admin/courses-prototype/pages'
+import { ProtoLayout } from './features/admin/courses-prototype/store'
 import { RoleRoute } from './features/authz/RoleRoute'
 import { queryClient } from './lib/queryClient'
 import { CatalogPage } from './pages/CatalogPage'
@@ -30,6 +32,11 @@ export function App() {
                 <Route index element={<CatalogPage />} />
                 <Route path="login" element={<LoginPage />} />
                 <Route path="signup" element={<SignupPage />} />
+                {/* PROTOTYPE (throwaway, ticket #8): in-memory course management, deliberately outside RoleRoute so it runs without the backend */}
+                <Route path="admin/courses" element={<ProtoLayout />}>
+                  <Route index element={<CoursesListPrototype />} />
+                  <Route path=":courseId" element={<CourseEditorPrototype />} />
+                </Route>
                 <Route element={<RoleRoute />}>
                   <Route path="admin" element={<Navigate to="/admin/users" replace />} />
                   <Route
