@@ -78,11 +78,48 @@ export class BodyParseError extends Error {
   }
 }
 
+const BODY_TOO_LARGE_MESSAGE = 'Request body is too large';
+
+// Reads the body through a reader, counting bytes, so an oversized chunked or
+// Content-Length-less request is cancelled mid-stream instead of buffered.
+async function readBodyText(request: Request, maxBytes: number | undefined): Promise<string> {
+  if (maxBytes === undefined) return await request.text();
+  if (request.body === null) return '';
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new BodyParseError(BODY_TOO_LARGE_MESSAGE);
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 // Reads and parses a JSON request body, raising a `BodyParseError` (never a
 // raw `SyntaxError`) on empty or malformed input -- callers can catch this
-// one type and translate it into the frozen error envelope.
-export async function parseJsonBody<T>(request: Request): Promise<T> {
-  const raw = await request.text();
+// one type and translate it into the frozen error envelope. With `maxBytes`,
+// the cap is enforced while streaming (and early via Content-Length).
+export async function parseJsonBody<T>(
+  request: Request,
+  options: { readonly maxBytes?: number } = {},
+): Promise<T> {
+  const { maxBytes } = options;
+  const declaredHeader = request.headers.get('Content-Length');
+  if (maxBytes !== undefined && declaredHeader !== null) {
+    const declared = Number(declaredHeader);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      await request.body?.cancel();
+      throw new BodyParseError(BODY_TOO_LARGE_MESSAGE);
+    }
+  }
+  const raw = await readBodyText(request, maxBytes);
   if (raw.trim().length === 0) {
     throw new BodyParseError('Request body is empty');
   }

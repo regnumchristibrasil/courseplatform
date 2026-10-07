@@ -115,6 +115,52 @@ async function createChargeOrError(
   }
 }
 
+interface CurrentAccessRow {
+  readonly role: string;
+  readonly is_active: boolean;
+}
+
+// Returns an error Response when the caller must not check out, else null.
+// `app.current_access()` is granted to `authenticated` and scoped to the
+// caller's own auth.uid(). No row means "no explicit access record", treated
+// as active to keep pre-A21 behaviour (A18 backfills every account).
+async function checkUserIsActive(
+  deps: CheckoutDeps,
+  callerClient: SupabaseClient,
+  userId: string,
+  requestId: string,
+): Promise<Response | null> {
+  let rows: readonly CurrentAccessRow[];
+  try {
+    const { data, error } = await callerClient.schema('app').rpc('current_access');
+    if (error) {
+      throw new Error(`app.current_access RPC failed: ${error.message}`);
+    }
+    rows = (data ?? []) as readonly CurrentAccessRow[];
+  } catch (error) {
+    await deps.captureExceptionAndFlush(deps.config.postHog, {
+      distinctId: userId,
+      error,
+      properties: { reason: 'checkout_access_lookup_failed' },
+    });
+    return errorJsonResponse({
+      code: 'internal_error',
+      message: 'Unexpected error while processing checkout',
+      status: 500,
+      requestId,
+    });
+  }
+  if (rows[0] && rows[0].is_active === false) {
+    return errorJsonResponse({
+      code: 'forbidden',
+      message: 'This account is deactivated and cannot start a checkout',
+      status: 403,
+      requestId,
+    });
+  }
+  return null;
+}
+
 export async function handleCheckoutRequest(
   request: Request,
   deps: CheckoutDeps,
@@ -175,6 +221,11 @@ export async function handleCheckoutRequest(
   // produce; Mercado Pago will just reject an empty payer email as an
   // invalid-input 4xx, which is handled as a generic provider error below.
   const payerEmail = user.email ?? '';
+
+  // ADR 0001, decisao 5: usuario desativado nao pode iniciar checkout.
+  // Fail closed: se o status nao puder ser lido, nega com 500 em vez de liberar.
+  const accessOutcome = await checkUserIsActive(deps, callerClient, user.id, requestId);
+  if (accessOutcome) return accessOutcome;
 
   const serviceClient = deps.createServiceRoleClient();
 

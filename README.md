@@ -95,6 +95,8 @@ Acesse `http://localhost:5173`.
 | `npm run build` | Build de produção (`tsc -b && vite build`) |
 | `npm test` | Roda os testes (Vitest) |
 | `npm run lint` | Lint (oxlint) |
+| `npm run test:e2e` | Roda E2E (Playwright) |
+| `npx playwright install chromium` | Primeiro run: instala chromium (necessário para E2E) |
 
 ## URLs locais (após `supabase start`)
 
@@ -109,6 +111,38 @@ Acesse `http://localhost:5173`.
 O Studio (`http://127.0.0.1:54323`) é o jeito mais rápido de inspecionar
 tabelas, criar usuários de teste (Authentication → Users) e ver os dados do
 `seed.sql`.
+
+## Testando E2E com Playwright
+
+Pré-requisito: instale chromium (primeira vez apenas):
+```bash
+cd frontend
+npx playwright install chromium
+```
+
+Execute em dois terminais:
+
+**Terminal 1 (backend):**
+```bash
+cd backend
+supabase start
+supabase db reset
+deno task seed:dev  # carrega fixtures de dev
+# Create .env outside the repo with fake values:
+supabase functions serve --env-file /tmp/supabase-dev.env
+```
+
+**Terminal 2 (frontend):**
+```bash
+cd frontend
+npm run test:e2e
+```
+
+Playwright inicia um dev server na porta 5199 automaticamente. Variáveis de env para E2E
+(definidas em `frontend/playwright.config.ts`):
+- `E2E_DB_CONTAINER`: container name do Postgres (default: `supabase_db_backend`)
+- `E2E_PORT`: porta da API local (default: 54321)
+- `E2E_FIXTURE_PASSWORD`: senha dos fixtures (default: igual em `seed.dev.sql`)
 
 ## Testando as Edge Functions localmente
 
@@ -147,7 +181,184 @@ Funções sem autenticação de usuário mas protegidas por segredo de cron
 (`payments-reconcile`, `outbox-drain`) usam o header `X-Cron-Secret`, com o
 valor de `CRON_SECRET` definido em `supabase/functions/.env`.
 
+### Variáveis de env para Edge Functions (desenvolvimento local)
+
+Create `supabase/functions/.env` (fora do repo, valores fictícios bastam):
+```
+MERCADOPAGO_ACCESS_TOKEN=fake
+MERCADOPAGO_PUBLIC_KEY=fake
+RESEND_API_KEY=fake
+POSTHOG_API_KEY=fake
+POSTHOG_HOST=fake
+CRON_SECRET=fake
+APP_PUBLIC_URL=http://localhost:5173
+COMPANY_NAME=Regnum Christi Brasil
+SUPPORT_EMAIL=support@example.test
+```
+
+Supabase local lê `.env` deste caminho específico, não de `backend/.env`.
+Valores fictícios são suficientes para testar logicamente as funções; credenciais reais
+só são necessários se de fato enviar dados aos provedores (Mercado Pago, Resend, PostHog).
+
+## Testes pgTAP (schema, RLS, triggers)
+
+Requer um banco de dados **limpo** (sem seed.dev carregado):
+
+```bash
+cd backend
+
+# Banco APENAS com seed.sql (migrations + dados iniciais, sem fixtures de dev)
+supabase db reset
+
+# Roda pgTAP suite
+supabase test db
+```
+
+Se você carregou `seed.dev.sql` e quer rodar os testes depois, precisa resetar:
+```bash
+supabase db reset  # Limpa e recarrega
+deno task test:seed-dev  # Apenas se quiser seeds após testes
+```
+
+Alternativa: depois de `deno task seed:dev`, há `tests-dev/` com testes SQL que assumem
+fixtures já carregadas (comportamento de integração, não isolamento).
+
+## Administração de usuários (gestão de papéis e desativação)
+
+A plataforma inclui uma área `/admin` para listar usuários, trocar papéis (student,
+tutor, admin, superadmin) e desativar/reativar contas. O modelo é documentado em
+`docs/adr/0001-gestao-de-usuarios-admin.md` (decisões de design, invariantes,
+implementação).
+
+### Primeiro superadmin (pós-deploy em produção)
+
+Executado uma única vez, por um operador com papel dono do schema (`postgres`).
+**Nunca use `supabase db reset` em produção** (apaga todos os dados).
+
+1. Aplique as migrations A18-A21:
+   ```bash
+   cd backend
+   supabase db push
+   ```
+   A migration A18 já executa `app_private.backfill_user_access()` (idempotente: toda conta
+   sem papel vira `student` ativo). Não é preciso rodá-lo à mão.
+
+2. A pessoa cria a conta normalmente (signup ou convite) e confirma o e-mail.
+
+3. Leia o `user_id` e confirme a identidade fora de banda (contato direto, datas de
+   criação e confirmação coerentes). O cadastro é aberto, então qualquer pessoa pode ter
+   pré-registrado o e-mail:
+   ```bash
+   psql "$DATABASE_URL" -c "select id, email, email_confirmed_at, banned_until, deleted_at, created_at
+     from auth.users where lower(email) = lower('<email>');"
+   ```
+
+4. Edite `backend/supabase/runbooks/bootstrap_superadmin.sql` e preencha os DOIS valores,
+   nas linhas marcadas `EDITAR AQUI`: o e-mail e o `user_id` lido no passo anterior.
+   Não commite o arquivo editado.
+
+5. Rode o script. Ele executa em uma única transação e, se qualquer verificação falhar
+   (e-mail inexistente ou não confirmado, `user_id` divergente, conta banida ou removida,
+   já é superadmin ativo), levanta exceção e nada é gravado:
+   ```bash
+   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/runbooks/bootstrap_superadmin.sql
+   ```
+   Em caso de dúvida antes do `commit`, troque-o por `rollback`.
+
+6. Verifique o resultado:
+   ```bash
+   psql "$DATABASE_URL" -c "select user_id, role, is_active from app_private.user_access
+     where role = 'superadmin';"
+   psql "$DATABASE_URL" -c "select actor_id, target_id, action, old_value, new_value, reason
+     from app_private.user_access_audit order by id desc limit 1;"
+   ```
+   Deve existir uma linha `superadmin` ativa e uma auditoria `role_changed` com o motivo
+   `bootstrap do primeiro superadmin`.
+
+7. Restaure o arquivo do runbook (`git checkout -- backend/supabase/runbooks/bootstrap_superadmin.sql`).
+   A partir daqui, admins e superadmins são geridos pela tela `/admin/users`, nunca por SQL manual.
+
+### Desenvolvimento local com admin
+
+```bash
+# Suba a stack local
+cd backend
+supabase start
+supabase db reset
+
+# Carregue as fixtures de dev (superadmin, admin, tutor, student)
+deno task seed:dev
+
+# Fixtures: senhas em backend/supabase/seed.dev.sql
+# Usuários: superadmin@example.test, admin@example.test, etc.
+```
+
+Acesse `/admin` no frontend com a conta superadmin. Sem autenticação, recebe 404 (não revela existência da área).
+
+### Matriz de permissões (resumida)
+
+| Actor       | Pode gerenciar | Pode atribuir papéis | Notas |
+|-------------|----------------|----------------------|-------|
+| superadmin  | todos          | todos (4: s, a, t, e) | incluindo outro superadmin |
+| admin       | student, tutor | student, tutor       | nunca toca admin/superadmin |
+| tutor       | ninguém        | —                    | rótulo apenas, sem poderes |
+| student     | ninguém        | —                    | usuário regular |
+
+- e: student  
+- t: tutor  
+- a: admin  
+- s: superadmin  
+
+Detalhes em `docs/adr/0001-gestao-de-usuarios-admin.md`.
+
+### Comandos úteis
+
+```bash
+# pgTAP: testes de schema/RLS/triggers (requer DB limpo, sem seed.dev carregado)
+cd backend
+supabase db reset  # carrega seed.sql APENAS (não seed.dev.sql)
+supabase test db
+
+# Testes das Edge Functions
+deno task test
+deno task coverage
+
+# Sincronizar matriz de permissões (se alterar backend/contracts/adminUsers.ts)
+# O arquivo deve ser espelhado byte-identicamente em frontend/src/contracts/adminUsers.ts
+deno task gen:matrix
+```
+
+### Desativação: o que bloqueia e o que não
+
+**Bloqueia:**
+- Login (ban no Auth + flag server-side).
+- Video playback (e free previews).
+- Checkout (403 forbidden).
+
+**Permite acesso:**
+- Leitura do catálogo público.
+- Leitura do perfil próprio.
+- `current_access` RPC (cliente checagem estado, redirecionamento).
+
+Webhook PIX pendente de confirmação ainda processa (a flag não retroage para ordens).
+
+## Sincronizar matriz de permissões
+
+Se alterar `backend/contracts/adminUsers.ts`, rode:
+```bash
+cd backend
+deno task gen:matrix
+```
+
+O arquivo **deve ser espelhado byte-identicamente** em `frontend/src/contracts/adminUsers.ts`.
+Há um teste de paridade (`backend/contracts/adminUsers.parity.test.ts`) que falha se divergirem.
+
 ## Problemas conhecidos / notas importantes
+
+- **TRUNCATE com eventos deferred em aberto:** defesa de I2 (último superadmin).
+  Se TRUNCATE for executado com deferred constraint triggers em aberto
+  (de uma transação anterior), PostgreSQL retorna SQLSTATE 55006. Isso não é
+  previsto em operação normal (migrations + seed + RPCs), apenas em SQL manual.
 
 - **Alterar `supabase/config.toml` ou `supabase/functions/deno.json` exige
   reiniciar a stack por completo** (`supabase stop` seguido de
@@ -166,8 +377,6 @@ valor de `CRON_SECRET` definido em `supabase/functions/.env`.
   falharem no boot local -- `loadBackendConfig()` valida todas as
   variáveis de uma vez e lista tudo que estiver faltando ou inválido em um
   único erro.
-- O repositório ainda não tem `.git` inicializado (escolha deliberada, ver
-  `PROGRESS.md`) -- nenhum dos comandos acima depende de git.
 
 ## O que este README não cobre
 

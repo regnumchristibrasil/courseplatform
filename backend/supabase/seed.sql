@@ -49,3 +49,7 @@ insert into app_private.lesson_assets (lesson_id, provider, external_ref, is_act
   ('e0000000-0000-0000-0000-000000000003', 'youtube', 'dQw4w9WgXcQ', true),
   ('e0000000-0000-0000-0000-000000000004', 'youtube', 'dQw4w9WgXcQ', true),
   ('e0000000-0000-0000-0000-000000000005', 'youtube', 'dQw4w9WgXcQ', true);
+
+-- Usuarios de teste ficam em seed.dev.sql (somente dev local, fora de
+-- [db.seed]). O runbook do primeiro superadmin (ambiente real) fica em
+-- runbooks/bootstrap_superadmin.sql.

@@ -1,13 +1,18 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { Spinner } from './components/ui/Spinner'
 import { PostHogProvider } from './features/analytics/PostHogProvider'
 import { AuthProvider } from './features/auth/AuthProvider'
+import { RoleRoute } from './features/authz/RoleRoute'
 import { queryClient } from './lib/queryClient'
 import { CatalogPage } from './pages/CatalogPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SignupPage } from './pages/SignupPage'
+
+const AdminUsersPage = lazy(() => import('./features/admin/users/AdminUsersPage'))
 
 // Composition root only — no business logic lives here. Each provider and
 // page below owns and tests its own behavior; see their respective test
@@ -25,6 +30,17 @@ export function App() {
                 <Route index element={<CatalogPage />} />
                 <Route path="login" element={<LoginPage />} />
                 <Route path="signup" element={<SignupPage />} />
+                <Route element={<RoleRoute />}>
+                  <Route path="admin" element={<Navigate to="/admin/users" replace />} />
+                  <Route
+                    path="admin/users"
+                    element={
+                      <Suspense fallback={<Spinner label="Carregando página..." />}>
+                        <AdminUsersPage />
+                      </Suspense>
+                    }
+                  />
+                </Route>
                 <Route path="*" element={<NotFoundPage />} />
               </Route>
             </Routes>

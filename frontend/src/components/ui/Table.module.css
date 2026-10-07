@@ -1,0 +1,36 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+
+.caption {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-h);
+  padding-bottom: 8px;
+}
+
+.th {
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text);
+}
+
+.busy {
+  opacity: 0.5;
+}

@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint $(find src -type f \\( -name '*.ts' -o -name '*.tsx' \\))",
+    "lint": "oxlint $(find src e2e -type f \\( -name '*.ts' -o -name '*.tsx' \\)) playwright.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:setup": "echo 'Pre-requisitos do E2E (ver README): (cd ../backend && supabase start && supabase db reset && deno task seed:dev) e, em outro terminal, (cd ../backend && supabase functions serve --env-file <arquivo-env-descartavel-fora-do-repo>).'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
@@ -20,6 +22,7 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
@@ -27,6 +30,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^30.0.1",
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",

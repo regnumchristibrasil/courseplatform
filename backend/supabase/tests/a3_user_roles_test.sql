@@ -1,44 +1,47 @@
--- A3 -- app_private.user_roles (default-deny, zero policies) + app.is_admin().
+-- A3 -- app_private.user_access (formerly user_roles; default-deny, zero
+-- policies) + app.is_admin(). Reshaped by A18; role/is_active semantics and
+-- the rest of A18 are covered in a18_user_access_test.sql.
 BEGIN;
 SELECT plan(19);
 
-SELECT has_table('app_private', 'user_roles', 'app_private.user_roles exists');
+SELECT has_table('app_private', 'user_access', 'app_private.user_access exists');
 SELECT ok(
-  (SELECT relrowsecurity FROM pg_class WHERE oid = 'app_private.user_roles'::regclass),
-  'RLS is enabled on app_private.user_roles'
+  (SELECT relrowsecurity FROM pg_class WHERE oid = 'app_private.user_access'::regclass),
+  'RLS is enabled on app_private.user_access'
 );
 SELECT is(
-  (SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'user_roles'),
+  (SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'user_access'),
   0,
-  'app_private.user_roles has zero RLS policies (default deny even for the owning user)'
+  'app_private.user_access has zero RLS policies (default deny even for the owning user)'
 );
 
 -- Fixtures.
 INSERT INTO auth.users (id, email) VALUES
   ('11111111-1111-1111-1111-111111111111', 'admin@example.com'),
-  ('22222222-2222-2222-2222-222222222222', 'plain-user@example.com');
+  ('22222222-2222-2222-2222-222222222222', 'plain-user@example.com'),
+  ('33333333-3333-3333-3333-333333333333', 'to-delete@example.com');
 
 -- anon: fully denied.
 SET LOCAL ROLE anon;
 SELECT throws_ok(
-  $$ SELECT count(*) FROM app_private.user_roles $$,
+  $$ SELECT count(*) FROM app_private.user_access $$,
   NULL, NULL,
-  'anon SELECT on app_private.user_roles is denied'
+  'anon SELECT on app_private.user_access is denied'
 );
 SELECT throws_ok(
-  $$ INSERT INTO app_private.user_roles (user_id, role) VALUES ('11111111-1111-1111-1111-111111111111', 'admin') $$,
+  $$ INSERT INTO app_private.user_access (user_id, role) VALUES (gen_random_uuid(), 'admin') $$,
   NULL, NULL,
-  'anon INSERT on app_private.user_roles is denied'
+  'anon INSERT on app_private.user_access is denied'
 );
 SELECT throws_ok(
-  $$ UPDATE app_private.user_roles SET role = 'admin' $$,
+  $$ UPDATE app_private.user_access SET role = 'admin' $$,
   NULL, NULL,
-  'anon UPDATE on app_private.user_roles is denied'
+  'anon UPDATE on app_private.user_access is denied'
 );
 SELECT throws_ok(
-  $$ DELETE FROM app_private.user_roles $$,
+  $$ DELETE FROM app_private.user_access $$,
   NULL, NULL,
-  'anon DELETE on app_private.user_roles is denied'
+  'anon DELETE on app_private.user_access is denied'
 );
 RESET ROLE;
 
@@ -47,24 +50,24 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SET LOCAL "request.jwt.claim.sub" = '11111111-1111-1111-1111-111111111111';
 SELECT throws_ok(
-  $$ SELECT count(*) FROM app_private.user_roles $$,
+  $$ SELECT count(*) FROM app_private.user_access $$,
   NULL, NULL,
-  'authenticated SELECT on app_private.user_roles is denied, even for the user''s own grants'
+  'authenticated SELECT on app_private.user_access is denied, even for the user''s own grants'
 );
 SELECT throws_ok(
-  $$ INSERT INTO app_private.user_roles (user_id, role) VALUES (auth.uid(), 'admin') $$,
+  $$ INSERT INTO app_private.user_access (user_id, role) VALUES (gen_random_uuid(), 'admin') $$,
   NULL, NULL,
-  'authenticated INSERT on app_private.user_roles is denied (no self-granted admin)'
+  'authenticated INSERT on app_private.user_access is denied (no self-granted admin)'
 );
 SELECT throws_ok(
-  $$ UPDATE app_private.user_roles SET role = 'admin' $$,
+  $$ UPDATE app_private.user_access SET role = 'admin' $$,
   NULL, NULL,
-  'authenticated UPDATE on app_private.user_roles is denied'
+  'authenticated UPDATE on app_private.user_access is denied'
 );
 SELECT throws_ok(
-  $$ DELETE FROM app_private.user_roles $$,
+  $$ DELETE FROM app_private.user_access $$,
   NULL, NULL,
-  'authenticated DELETE on app_private.user_roles is denied'
+  'authenticated DELETE on app_private.user_access is denied'
 );
 
 -- app.is_admin(): false with no grant, true once service_role inserts one.
@@ -72,24 +75,23 @@ SELECT ok(NOT app.is_admin(), 'app.is_admin() is false for a user with no role g
 RESET ROLE;
 
 SET LOCAL ROLE service_role;
-INSERT INTO app_private.user_roles (user_id, role) VALUES ('11111111-1111-1111-1111-111111111111', 'admin');
+-- handle_new_user (A18) already created a student row per fixture user.
 SELECT is(
-  (SELECT count(*)::int FROM app_private.user_roles),
-  1,
-  'service_role can INSERT into app_private.user_roles'
+  (SELECT count(*)::int FROM app_private.user_access),
+  3,
+  'service_role can SELECT app_private.user_access (one student row per fixture user)'
 );
-INSERT INTO app_private.user_roles (user_id, role) VALUES ('22222222-2222-2222-2222-222222222222', 'admin');
-UPDATE app_private.user_roles SET granted_at = now() WHERE user_id = '22222222-2222-2222-2222-222222222222';
+UPDATE app_private.user_access SET role = 'admin' WHERE user_id = '11111111-1111-1111-1111-111111111111';
 SELECT is(
-  (SELECT count(*)::int FROM app_private.user_roles WHERE user_id = '22222222-2222-2222-2222-222222222222'),
-  1,
-  'service_role can UPDATE app_private.user_roles'
+  (SELECT role FROM app_private.user_access WHERE user_id = '11111111-1111-1111-1111-111111111111'),
+  'admin',
+  'service_role can UPDATE app_private.user_access'
 );
-DELETE FROM app_private.user_roles WHERE user_id = '22222222-2222-2222-2222-222222222222';
+DELETE FROM app_private.user_access WHERE user_id = '33333333-3333-3333-3333-333333333333';
 SELECT is(
-  (SELECT count(*)::int FROM app_private.user_roles WHERE user_id = '22222222-2222-2222-2222-222222222222'),
+  (SELECT count(*)::int FROM app_private.user_access WHERE user_id = '33333333-3333-3333-3333-333333333333'),
   0,
-  'service_role can DELETE from app_private.user_roles'
+  'service_role can DELETE from app_private.user_access'
 );
 RESET ROLE;
 

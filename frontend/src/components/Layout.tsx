@@ -1,6 +1,7 @@
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { COMPANY_NAME } from '../config/brand'
 import { useAuth } from '../features/auth/useAuth'
+import { AdminNavLink } from '../features/authz/AdminNavLink'
 import { Button } from './ui/Button'
 import styles from './Layout.module.css'
 
@@ -23,6 +24,7 @@ export function Layout() {
           <Link to="/">Catálogo</Link>
           {user ? (
             <>
+              <AdminNavLink />
               <span>{user.email}</span>
               <Button variant="secondary" onClick={handleSignOut}>
                 Sair

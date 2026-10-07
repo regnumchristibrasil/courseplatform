@@ -9,7 +9,7 @@
 -- that accidentally widens a grant on any table shows up here even if its
 -- own test file's happy-path assertions still pass.
 BEGIN;
-SELECT plan(47);
+SELECT plan(62);
 
 -- RLS enabled on every actual table (not the courses_public view, which is
 -- a security_invoker view over an RLS-protected base table, not RLS itself).
@@ -22,13 +22,13 @@ SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'app_private.lesson_a
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'app_private.payment_events'::regclass), 'RLS enabled: app_private.payment_events');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'app_private.email_outbox'::regclass), 'RLS enabled: app_private.email_outbox');
 
--- Zero-policy tables (app_private.user_roles is supplemental -- it is not
+-- Zero-policy tables (app_private.user_access is supplemental -- it is not
 -- itself a row in the frozen matrix table, but follows the identical
 -- zero-policy/service-role-only posture as the three that are).
 SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'lesson_assets'), 0, 'zero policies: app_private.lesson_assets');
 SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'payment_events'), 0, 'zero policies: app_private.payment_events');
 SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'email_outbox'), 0, 'zero policies: app_private.email_outbox');
-SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'user_roles'), 0, 'zero policies: app_private.user_roles (supplemental, same posture)');
+SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'user_access'), 0, 'zero policies: app_private.user_access (supplemental, same posture)');
 
 -- public.users -- matrix row "anon: -, owner: S+U (own row), other: -, service_role: all".
 -- (RLS distinguishes "owner" from "other user" for the same authenticated
@@ -205,22 +205,98 @@ SELECT is(
   'app_private.email_outbox x service_role: all'
 );
 
--- app_private.user_roles -- supplemental, same posture, not itself a row
--- in the frozen matrix table (see A3).
+-- app_private.user_access -- supplemental, same posture, not itself a row
+-- in the frozen matrix table (see A3/A18).
 SELECT is(
-  (SELECT coalesce(array_agg(privilege_type::text ORDER BY privilege_type), ARRAY[]::text[]) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_roles' AND grantee = 'anon'),
+  (SELECT coalesce(array_agg(privilege_type::text ORDER BY privilege_type), ARRAY[]::text[]) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_access' AND grantee = 'anon'),
   ARRAY[]::text[],
-  'app_private.user_roles x anon: no grants'
+  'app_private.user_access x anon: no grants'
 );
 SELECT is(
-  (SELECT coalesce(array_agg(privilege_type::text ORDER BY privilege_type), ARRAY[]::text[]) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_roles' AND grantee = 'authenticated'),
+  (SELECT coalesce(array_agg(privilege_type::text ORDER BY privilege_type), ARRAY[]::text[]) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_access' AND grantee = 'authenticated'),
   ARRAY[]::text[],
-  'app_private.user_roles x authenticated: no grants (no self-granted admin)'
+  'app_private.user_access x authenticated: no grants (no self-granted admin)'
 );
 SELECT is(
-  (SELECT array_agg(privilege_type::text ORDER BY privilege_type) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_roles' AND grantee = 'service_role'),
+  (SELECT array_agg(privilege_type::text ORDER BY privilege_type) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_access' AND grantee = 'service_role'),
   ARRAY['DELETE', 'INSERT', 'SELECT', 'UPDATE'],
-  'app_private.user_roles x service_role: all'
+  'app_private.user_access x service_role: all'
+);
+
+-- app_private.user_access_audit (A18) -- append-only: service_role gets
+-- INSERT and SELECT only, no client grants, RLS on, zero policies.
+SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'app_private.user_access_audit'::regclass), 'RLS enabled: app_private.user_access_audit');
+SELECT is((SELECT count(*)::int FROM pg_policies WHERE schemaname = 'app_private' AND tablename = 'user_access_audit'), 0, 'zero policies: app_private.user_access_audit');
+SELECT is(
+  (SELECT coalesce(array_agg(privilege_type::text ORDER BY privilege_type), ARRAY[]::text[]) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_access_audit' AND grantee = 'anon'),
+  ARRAY[]::text[],
+  'app_private.user_access_audit x anon: no grants'
+);
+SELECT is(
+  (SELECT coalesce(array_agg(privilege_type::text ORDER BY privilege_type), ARRAY[]::text[]) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_access_audit' AND grantee = 'authenticated'),
+  ARRAY[]::text[],
+  'app_private.user_access_audit x authenticated: no grants'
+);
+SELECT is(
+  (SELECT array_agg(privilege_type::text ORDER BY privilege_type) FROM information_schema.role_table_grants WHERE table_schema = 'app_private' AND table_name = 'user_access_audit' AND grantee = 'service_role'),
+  ARRAY['INSERT', 'SELECT'],
+  'app_private.user_access_audit x service_role: INSERT and SELECT only (append-only)'
+);
+SELECT ok(
+  has_function_privilege('authenticated', 'app.current_access()', 'EXECUTE') AND NOT has_function_privilege('anon', 'app.current_access()', 'EXECUTE'),
+  'app.current_access(): authenticated only'
+);
+
+-- A19/A20 RPCs: authenticated only; internal helpers not executable by clients.
+SELECT ok(
+  has_function_privilege('authenticated', 'app.admin_list_users(text,text,boolean,int,int)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app.admin_list_users(text,text,boolean,int,int)', 'EXECUTE'),
+  'app.admin_list_users(): authenticated only'
+);
+SELECT ok(
+  has_function_privilege('authenticated', 'app.admin_set_user_role(uuid,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app.admin_set_user_role(uuid,text,text,text)', 'EXECUTE'),
+  'app.admin_set_user_role(): authenticated only'
+);
+SELECT ok(
+  has_function_privilege('authenticated', 'app.admin_set_user_active(uuid,boolean,boolean,text)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app.admin_set_user_active(uuid,boolean,boolean,text)', 'EXECUTE'),
+  'app.admin_set_user_active(): authenticated only'
+);
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'app_private.lock_and_check_target(uuid,boolean,text,text,boolean,boolean,text)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app_private.lock_and_check_target(uuid,boolean,text,text,boolean,boolean,text)', 'EXECUTE'),
+  'app_private.lock_and_check_target(): not executable by client roles'
+);
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'app_private.backfill_user_access()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app_private.backfill_user_access()', 'EXECUTE'),
+  'app_private.backfill_user_access(): not executable by client roles'
+);
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'app_private.assert_not_last_superadmin(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app_private.assert_not_last_superadmin(uuid)', 'EXECUTE'),
+  'app_private.assert_not_last_superadmin(): not executable by client roles'
+);
+
+-- Funcoes internas de I2 (a20): nunca executaveis por papeis de cliente nem PUBLIC.
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'app_private.user_access_lock()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app_private.user_access_lock()', 'EXECUTE')
+  AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.oid = 'app_private.user_access_lock()'::regprocedure AND a.grantee = 0),
+  'app_private.user_access_lock(): not executable by authenticated/anon/PUBLIC'
+);
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'app_private.guard_last_superadmin()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app_private.guard_last_superadmin()', 'EXECUTE')
+  AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.oid = 'app_private.guard_last_superadmin()'::regprocedure AND a.grantee = 0),
+  'app_private.guard_last_superadmin(): not executable by authenticated/anon/PUBLIC'
+);
+SELECT ok(
+  NOT has_function_privilege('authenticated', 'app_private.guard_user_access_truncate()', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'app_private.guard_user_access_truncate()', 'EXECUTE')
+  AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.oid = 'app_private.guard_user_access_truncate()'::regprocedure AND a.grantee = 0),
+  'app_private.guard_user_access_truncate(): not executable by authenticated/anon/PUBLIC'
 );
 
 -- The audit view itself: diagnostic-only, service_role only.

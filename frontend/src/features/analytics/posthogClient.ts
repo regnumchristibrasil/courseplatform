@@ -1,4 +1,5 @@
 import posthog from 'posthog-js'
+import { sanitizeCaptureResult } from './sanitizeAnalytics'
 
 export interface PostHogInitConfig {
   readonly apiKey: string
@@ -13,6 +14,8 @@ export function initPostHogClient({ apiKey, apiHost }: PostHogInitConfig): void 
     api_host: apiHost,
     autocapture: true,
     capture_pageview: true,
+    // Remove ?q= (e-mail/nome) e texto de elementos nas rotas /admin/*.
+    before_send: sanitizeCaptureResult,
   })
 }
 

@@ -716,3 +716,52 @@ Deno.test('handlePaymentsWebhook builds the WebhookRequest from the raw, unparse
   assertEquals(calls[0]?.headers['x-signature'], 'ts=1,v1=abc');
   assertEquals(calls[0]?.headers['x-request-id'], 'req-42');
 });
+
+// ADR 0001, decision 5: a deactivated user's pending PIX order must still be
+// confirmed. The webhook must never consult user_access/is_active; access
+// stays blocked downstream by app.has_active_enrollment.
+Deno.test('handlePaymentsWebhook confirms the order without ever consulting user access (deactivated payer still gets confirmed)', async () => {
+  const event = buildEvent();
+  const { provider } = fakePaymentProvider(() => Promise.resolve(okParseResult([event])));
+  const { client: inner } = createFakeSupabase();
+  const touched: string[] = [];
+  const innerClient = inner as unknown as {
+    schema: (s: string) => { from: (t: string) => unknown };
+    from: (t: string) => unknown;
+  };
+  const spy = {
+    schema: (schemaName: string) => {
+      const scoped = innerClient.schema(schemaName);
+      return {
+        from: (table: string) => {
+          touched.push(`${schemaName}.${table}`);
+          return scoped.from(table);
+        },
+      };
+    },
+    from: (table: string) => {
+      touched.push(`public.${table}`);
+      return innerClient.from(table);
+    },
+    rpc: (fn: string) => {
+      touched.push(`rpc:${fn}`);
+      throw new Error('webhook must not call rpc directly in this test');
+    },
+  } as unknown as SupabaseClient;
+  const { fn: confirmOrderFn, calls: confirmCalls } = fakeConfirmOrder(confirmedResult());
+
+  const response = await handlePaymentsWebhook(
+    postRequest(),
+    baseDeps({
+      paymentProvider: provider,
+      supabase: spy,
+      captureFn: fakeCapture().fn,
+      confirmOrderFn,
+    }),
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(confirmCalls.length, 1);
+  assertEquals(touched.filter((t) => t.includes('user_access') || t.startsWith('rpc:')), []);
+  assertEquals(touched.length > 0, true);
+});

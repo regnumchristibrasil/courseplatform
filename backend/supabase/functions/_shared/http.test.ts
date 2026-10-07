@@ -96,3 +96,125 @@ Deno.test('parseJsonBody rejects malformed JSON with BodyParseError', async () =
   const request = new Request('https://example.com', { method: 'POST', body: '{not-json' });
   await assertRejects(() => parseJsonBody(request), BodyParseError, 'not valid JSON');
 });
+
+const encoder = new TextEncoder();
+
+interface TrackedStream {
+  readonly stream: ReadableStream<Uint8Array>;
+  readonly state: { pulled: number; cancelled: boolean };
+}
+
+function trackedStream(chunks: readonly Uint8Array[]): TrackedStream {
+  const state = { pulled: 0, cancelled: false };
+  let index = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[index];
+      if (chunk === undefined) {
+        controller.close();
+        return;
+      }
+      index += 1;
+      state.pulled += 1;
+      controller.enqueue(chunk);
+    },
+    cancel() {
+      state.cancelled = true;
+    },
+  });
+  return { stream, state };
+}
+
+function streamRequest(stream: ReadableStream<Uint8Array>, headers: HeadersInit = {}): Request {
+  return new Request('https://example.com', {
+    method: 'POST',
+    body: stream,
+    headers,
+    // @ts-ignore: duplex is required by fetch for streamed bodies
+    duplex: 'half',
+  });
+}
+
+Deno.test('parseJsonBody cancels a chunked stream as soon as maxBytes is exceeded', async () => {
+  const chunks = Array.from({ length: 50 }, () => encoder.encode('x'.repeat(100)));
+  const { stream, state } = trackedStream(chunks);
+  await assertRejects(
+    () => parseJsonBody(streamRequest(stream), { maxBytes: 250 }),
+    BodyParseError,
+    'too large',
+  );
+  assertEquals(state.cancelled, true);
+  assertEquals(state.pulled < chunks.length, true);
+});
+
+Deno.test('parseJsonBody rejects an oversized body without Content-Length', async () => {
+  const { stream } = trackedStream([encoder.encode('{"a":"' + 'x'.repeat(300) + '"}')]);
+  await assertRejects(
+    () => parseJsonBody(streamRequest(stream), { maxBytes: 100 }),
+    BodyParseError,
+    'too large',
+  );
+});
+
+Deno.test('parseJsonBody rejects early when Content-Length is over the cap', async () => {
+  const { stream, state } = trackedStream([encoder.encode('{}')]);
+  await assertRejects(
+    () => parseJsonBody(streamRequest(stream, { 'Content-Length': '5000' }), { maxBytes: 100 }),
+    BodyParseError,
+    'too large',
+  );
+  assertEquals(state.pulled, 0);
+});
+
+Deno.test('parseJsonBody accepts a body of exactly maxBytes', async () => {
+  const raw = '{"a":"' + 'x'.repeat(10) + '"}';
+  const bytes = encoder.encode(raw);
+  const request = new Request('https://example.com', { method: 'POST', body: bytes });
+  assertEquals(await parseJsonBody(request, { maxBytes: bytes.byteLength }), {
+    a: 'x'.repeat(10),
+  });
+  const { stream } = trackedStream([bytes]);
+  assertEquals(await parseJsonBody(streamRequest(stream), { maxBytes: bytes.byteLength }), {
+    a: 'x'.repeat(10),
+  });
+});
+
+Deno.test('parseJsonBody rejects maxBytes + 1', async () => {
+  const bytes = encoder.encode('{"a":"' + 'x'.repeat(10) + '"}');
+  const { stream } = trackedStream([bytes]);
+  await assertRejects(
+    () => parseJsonBody(streamRequest(stream), { maxBytes: bytes.byteLength - 1 }),
+    BodyParseError,
+    'too large',
+  );
+});
+
+Deno.test('parseJsonBody leaves small bodies unaffected under a cap', async () => {
+  const request = new Request('https://example.com', {
+    method: 'POST',
+    body: JSON.stringify({ ok: true }),
+  });
+  assertEquals(await parseJsonBody(request, { maxBytes: 4096 }), { ok: true });
+});
+
+Deno.test('parseJsonBody decodes multi-byte UTF-8 split across chunks', async () => {
+  const bytes = encoder.encode('{"name":"aç\u{1F600}b"}');
+  const emojiStart = bytes.indexOf(0xf0);
+  const { stream } = trackedStream([
+    bytes.slice(0, emojiStart + 2),
+    bytes.slice(emojiStart + 2),
+  ]);
+  assertEquals(await parseJsonBody(streamRequest(stream), { maxBytes: 4096 }), {
+    name: 'aç\u{1F600}b',
+  });
+});
+
+Deno.test('parseJsonBody counts bytes, not characters, against maxBytes', async () => {
+  const raw = '{"a":"' + 'ç'.repeat(10) + '"}';
+  const { stream } = trackedStream([encoder.encode(raw)]);
+  await assertRejects(
+    () => parseJsonBody(streamRequest(stream), { maxBytes: raw.length }),
+    BodyParseError,
+    'too large',
+  );
+});
