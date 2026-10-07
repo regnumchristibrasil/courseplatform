@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js'
 import type { ReactNode } from 'react'
@@ -227,13 +227,22 @@ describe('AuthProvider', () => {
 describe('AuthProvider access cache', () => {
   const ADMIN_LIST_KEY = ['admin', 'users', 'list', { limit: 20, offset: 0 }]
 
+  // resetQueries keeps the entries but drops their data, so "cleared" means
+  // that no cached payload survives (PII must not leak to the next user).
+  function cachedPayloads(queryClient: QueryClient) {
+    return queryClient
+      .getQueryCache()
+      .getAll()
+      .filter((query) => query.state.data !== undefined)
+  }
+
   function seed(queryClient: QueryClient) {
     queryClient.setQueryData(['me'], { role: 'admin', isActive: true })
     queryClient.setQueryData(['me', 'user-1'], { role: 'admin', isActive: true })
     queryClient.setQueryData(ADMIN_LIST_KEY, { users: [{ email: 'pii@example.com' }], total: 1 })
   }
 
-  it('clears the whole cache (including the admin PII list) on signOut', async () => {
+  it('resets the whole cache (including the admin PII list) on signOut', async () => {
     const { client } = buildFakeSupabaseClient({ initialSession: buildFakeSession() })
     vi.mocked(client.auth.signOut).mockResolvedValue({ error: null })
     const queryClient = new QueryClient()
@@ -245,10 +254,10 @@ describe('AuthProvider access cache', () => {
       await result.current.signOut()
     })
 
-    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(cachedPayloads(queryClient)).toHaveLength(0)
   })
 
-  it('clears the whole cache when the user id changes, but not on a token refresh', async () => {
+  it('resets the whole cache when the user id changes, but not on a token refresh', async () => {
     const { client, emitAuthStateChange } = buildFakeSupabaseClient({
       initialSession: buildFakeSession(),
     })
@@ -260,16 +269,16 @@ describe('AuthProvider access cache', () => {
     act(() => {
       emitAuthStateChange('TOKEN_REFRESHED', buildFakeSession())
     })
-    expect(queryClient.getQueryCache().getAll()).toHaveLength(3)
+    expect(cachedPayloads(queryClient)).toHaveLength(3)
 
     const other = buildFakeSession()
     act(() => {
       emitAuthStateChange('SIGNED_IN', { ...other, user: { ...other.user, id: 'user-2' } })
     })
-    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(cachedPayloads(queryClient)).toHaveLength(0)
   })
 
-  it('clears the whole cache when the session ends', async () => {
+  it('resets the whole cache when the session ends', async () => {
     const { client, emitAuthStateChange } = buildFakeSupabaseClient({
       initialSession: buildFakeSession(),
     })
@@ -282,7 +291,7 @@ describe('AuthProvider access cache', () => {
       emitAuthStateChange('SIGNED_OUT', null)
     })
 
-    expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+    expect(cachedPayloads(queryClient)).toHaveLength(0)
   })
 
   it('clears only once when signOut is followed by the SIGNED_OUT event', async () => {
@@ -294,7 +303,7 @@ describe('AuthProvider access cache', () => {
       return { error: null }
     })
     const queryClient = new QueryClient()
-    const clear = vi.spyOn(queryClient, 'clear')
+    const reset = vi.spyOn(queryClient, 'resetQueries')
     const { result } = renderUseAuth(client, queryClient)
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
@@ -302,6 +311,96 @@ describe('AuthProvider access cache', () => {
       await result.current.signOut()
     })
 
-    expect(clear).toHaveBeenCalledTimes(1)
+    expect(reset).toHaveBeenCalledTimes(1)
+  })
+  it('does not reset the cache when the first auth event hydrates the stored session', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    const queryClient = new QueryClient()
+    const reset = vi.spyOn(queryClient, 'resetQueries')
+    const { result } = renderUseAuth(client, queryClient)
+
+    act(() => {
+      emitAuthStateChange('INITIAL_SESSION', buildFakeSession())
+    })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  it('does not reset the cache when getSession hydrates after the first auth event', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    const queryClient = new QueryClient()
+    const reset = vi.spyOn(queryClient, 'resetQueries')
+    renderUseAuth(client, queryClient)
+
+    act(() => {
+      emitAuthStateChange('INITIAL_SESSION', buildFakeSession())
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(reset).not.toHaveBeenCalled()
+  })
+
+  it('lets an in-flight query that mounted before auth settled complete (catalog spinner regression)', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    const queryClient = new QueryClient()
+
+    function Catalog() {
+      const { data, isLoading } = useQuery({
+        queryKey: ['courses', 'published'],
+        queryFn: () => new Promise<string>((resolve) => setTimeout(() => resolve('Curso X'), 50)),
+      })
+      return <p>{isLoading ? 'loading' : data}</p>
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider client={client}>
+          <Catalog />
+        </AuthProvider>
+      </QueryClientProvider>,
+    )
+    act(() => {
+      emitAuthStateChange('INITIAL_SESSION', buildFakeSession())
+    })
+
+    expect(await screen.findByText('Curso X')).toBeInTheDocument()
+  })
+
+  it('refetches active queries for the new user when the user id changes', async () => {
+    const { client, emitAuthStateChange } = buildFakeSupabaseClient({
+      initialSession: buildFakeSession(),
+    })
+    const queryClient = new QueryClient()
+    const queryFn = vi.fn().mockResolvedValueOnce('first').mockResolvedValue('second')
+
+    function Probe() {
+      const { data } = useQuery({ queryKey: ['courses', 'published'], queryFn })
+      return <p>{data ?? 'loading'}</p>
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider client={client}>
+          <Probe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    )
+    await screen.findByText('first')
+
+    const other = buildFakeSession()
+    act(() => {
+      emitAuthStateChange('SIGNED_IN', { ...other, user: { ...other.user, id: 'user-2' } })
+    })
+
+    expect(await screen.findByText('second')).toBeInTheDocument()
   })
 })
