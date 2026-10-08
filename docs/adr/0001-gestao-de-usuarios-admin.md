@@ -28,6 +28,9 @@ decisão; cada emenda traz marcador apontando para este ADR.
    `app_private.user_access`, sem policies e sem grants para o cliente.
 2. **Hierarquia:** `superadmin` > `admin` > `tutor` > `student`. O papel
    `tutor` é apenas um rótulo por enquanto (nenhuma capacidade nova).
+   **Emendada pelo ADR-0002:** a definição de `tutor` como rótulo está
+   superada; o papel passa a ter capacidades de conteúdo de cursos (ver
+   `0002-modelo-de-conteudo-de-cursos.md`). A hierarquia permanece.
 3. **Desativação híbrida:** o flag `is_active` no banco é a fonte da
    verdade e é gravado primeiro; em seguida a Edge Function `admin-users`
    aplica o ban no Auth (GoTrue). Falha no Auth retorna 502
