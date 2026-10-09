@@ -295,6 +295,7 @@ Deno.test('handleCheckoutRequest returns 404 course_not_found (same code) when t
 Deno.test('handleCheckoutRequest new-order happy path: inserts an order, creates the charge, updates provider refs, and emits payment_charge_created', async () => {
   const tables: Record<string, FakeTableConfig> = {
     courses: { select: { data: courseRow(), error: null } },
+    enrollments: { select: { data: null, error: null } },
     orders: {
       select: { data: null, error: null }, // no reusable order
       insert: { data: { id: 'order-new' }, error: null },
@@ -386,6 +387,7 @@ Deno.test('handleCheckoutRequest new-order happy path: inserts an order, creates
 Deno.test('handleCheckoutRequest reuses an existing non-expired pending order instead of inserting a new one', async () => {
   const tables: Record<string, FakeTableConfig> = {
     courses: { select: { data: courseRow(), error: null } },
+    enrollments: { select: { data: null, error: null } },
     orders: {
       select: {
         data: {
@@ -439,6 +441,7 @@ Deno.test('handleCheckoutRequest reuses an existing non-expired pending order in
 Deno.test('handleCheckoutRequest returns 502 payment_provider_error when the provider throws, without leaking response body PII', async () => {
   const tables: Record<string, FakeTableConfig> = {
     courses: { select: { data: courseRow(), error: null } },
+    enrollments: { select: { data: null, error: null } },
     orders: {
       select: { data: null, error: null },
       insert: { data: { id: 'order-new' }, error: null },
@@ -486,6 +489,7 @@ Deno.test('handleCheckoutRequest returns 502 payment_provider_error when the pro
 Deno.test('handleCheckoutRequest returns 502 payment_provider_error on the reuse-existing-order path too', async () => {
   const tables: Record<string, FakeTableConfig> = {
     courses: { select: { data: courseRow(), error: null } },
+    enrollments: { select: { data: null, error: null } },
     orders: {
       select: {
         data: {
@@ -623,4 +627,65 @@ Deno.test('handleCheckoutRequest treats a user without a user_access row as acti
     captureExceptionAndFlush: fakeCaptureException().fn,
   });
   assertEquals(response.status, 404);
+});
+
+Deno.test('handleCheckoutRequest rejects a student with valid access with 409 already_enrolled before creating any order or charge', async () => {
+  const tables: Record<string, FakeTableConfig> = {
+    courses: { select: { data: courseRow(), error: null } },
+    enrollments: { select: { data: { id: 'enrollment-1' }, error: null } },
+  };
+  const { client: serviceClient, calls: serviceCalls } = createFakeClient(tables);
+  const { provider, calls: providerCalls } = fakePaymentProvider(() =>
+    Promise.reject(new Error('provider must not be called'))
+  );
+
+  const response = await handleCheckoutRequest(buildRequest({ courseId: 'course-1' }), {
+    config: sampleConfig(),
+    createCallerClient: () => fakeCallerClient({ id: 'user-1', email: 'buyer@example.com' }),
+    createServiceRoleClient: () => serviceClient as unknown as SupabaseClient,
+    paymentProvider: provider,
+    captureAndFlush: fakeCapture().fn,
+    captureExceptionAndFlush: fakeCaptureException().fn,
+  });
+
+  assertEquals(response.status, 409);
+  const json = await response.json();
+  assertEquals(json.error.code, 'already_enrolled');
+  assertEquals(providerCalls.length, 0);
+  assertEquals(serviceCalls.some((c) => c.table === 'orders'), false);
+});
+
+Deno.test('handleCheckoutRequest only counts non-expired active enrollments as valid access (repurchase after expiry proceeds)', async () => {
+  const tables: Record<string, FakeTableConfig> = {
+    courses: { select: { data: courseRow(), error: null } },
+    enrollments: { select: { data: null, error: null } },
+    orders: {
+      select: { data: null, error: null },
+      insert: { data: { id: 'order-new' }, error: null },
+      update: { data: null, error: null },
+    },
+  };
+  const { client: serviceClient, calls: serviceCalls } = createFakeClient(tables);
+  const { provider } = fakePaymentProvider(() =>
+    Promise.resolve(sampleCharge({ externalReference: 'order-new' }))
+  );
+
+  const response = await handleCheckoutRequest(buildRequest({ courseId: 'course-1' }), {
+    config: sampleConfig(),
+    createCallerClient: () => fakeCallerClient({ id: 'user-1', email: 'buyer@example.com' }),
+    createServiceRoleClient: () => serviceClient as unknown as SupabaseClient,
+    paymentProvider: provider,
+    captureAndFlush: fakeCapture().fn,
+    captureExceptionAndFlush: fakeCaptureException().fn,
+  });
+
+  assertEquals(response.status, 200);
+  const filters = serviceCalls.filter((c) => c.table === 'enrollments');
+  assertEquals(
+    filters.some((c) => c.method === 'eq' && c.args[0] === 'status' && c.args[1] === 'active'),
+    true,
+  );
+  const orFilter = filters.find((c) => c.method === 'or');
+  assertExists(orFilter);
+  assertMatch(String(orFilter.args[0]), /^expires_at\.is\.null,expires_at\.gt\./);
 });

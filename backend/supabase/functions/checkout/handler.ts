@@ -25,6 +25,7 @@ import { MissingAuthorizationError } from '../_shared/supabase.ts';
 import type { BackendConfig } from '../_shared/config.ts';
 import { captureAndFlush, captureExceptionAndFlush } from '../_shared/observability.ts';
 import { fetchPublishedCourse } from './courses.ts';
+import { hasValidAccess } from './enrollments.ts';
 import { findReusableOrder, insertPendingOrder, updateOrderProviderRefs } from './orders.ts';
 import { buildCheckoutResponse } from './response.ts';
 import {
@@ -236,6 +237,17 @@ export async function handleCheckoutRequest(
         code: 'course_not_found',
         message: 'Course not found',
         status: 404,
+        requestId,
+      });
+    }
+
+    // ADR 0003: quem ainda tem acesso valido (inclusive vitalicio) nao paga
+    // de novo. Antes de qualquer pedido ou cobranca.
+    if (await hasValidAccess(serviceClient, user.id, body.courseId)) {
+      return errorJsonResponse({
+        code: 'already_enrolled',
+        message: 'You already have valid access to this course',
+        status: 409,
         requestId,
       });
     }
