@@ -20,12 +20,71 @@ apenas papéis `student` ou `tutor`. Nunca toca em `admin` ou `superadmin`. Sem 
 a usuários com papel superior.
 
 **Tutor**  
-Papel introduzido para expansão futura. Hoje é apenas um rótulo (sem capacidades novas).
-Pode ser gerenciado por `admin` e `superadmin`.
+Papel de conteúdo. Acessa a área de gestão de cursos e pode editar módulos e aulas,
+publicar, arquivar e excluir cursos, mas não pode alterar o preço. Sem acesso à gestão de
+usuários. Pode ser gerenciado por `admin` e `superadmin`.
 
 **Aluno (Student)**  
 Papel padrão atribuído a todo novo usuário. Único papel sem poderes administrativos.
 Pode ser promovido por `admin` ou `superadmin`.
+
+## Conteúdo e catálogo
+
+**Curso**  
+Produto vendido ao aluno: título, descrição, preço, duração de acesso e uma sequência
+ordenada de módulos. Passa pelos status rascunho, publicado e arquivado.
+
+**Módulo**  
+Agrupamento ordenado de aulas dentro de um curso. Tem título e posição, e pode ser
+arquivado.
+
+**Aula**  
+Unidade de conteúdo de um módulo: título, duração opcional, indicação de pré-visualização
+gratuita e, quando pronta, um vídeo. Pode ser arquivada.
+
+**Pré-visualização gratuita**  
+Aula que qualquer usuário logado pode assistir sem matrícula.
+
+**Status do curso**  
+Rascunho (invisível ao público), publicado (no catálogo) ou arquivado (fora do catálogo,
+preservado). Transições permitidas: rascunho para publicado; publicado para rascunho ou
+arquivado; arquivado para rascunho.
+
+**Portão de publicação**  
+Condição para um curso estar publicado: ao menos uma aula ativa, e toda aula ativa com
+vídeo. Itens arquivados não contam.
+
+**Arquivamento (de curso, módulo ou aula)**  
+Retirada reversível de um item do catálogo, preservando-o. Substitui a exclusão sempre
+que há matrículas ou pedidos.
+
+**Exclusão com vendas**  
+Curso com matrículas ou pedidos nunca pode ser excluído, nem ter módulos ou aulas
+excluídos; só arquivados.
+
+**Preço do curso**  
+Valor em reais, maior que zero e até R$ 100.000,00. Curso gratuito está fora de escopo.
+Somente `admin` e `superadmin` o alteram.
+
+**Duração de acesso**  
+Dias de acesso após a matrícula; vazio significa acesso vitalício.
+
+**Acesso do aluno**  
+Quem comprou um curso o mantém até a data de expiração, mesmo que o curso seja despublicado
+ou arquivado depois. Curso de acesso vitalício nunca expira.
+
+**Recompra**  
+Após a expiração, o curso volta a ser um produto comum do catálogo para aquele aluno, que
+precisa comprá-lo de novo. Vale apenas se o curso estiver publicado.
+
+**Auditoria de cursos**  
+Registro append-only das ações sensíveis sobre cursos: alteração de preço e de duração de
+acesso, mudança de status e exclusões. Edições de conteúdo (títulos, ordem, vídeos) não
+são auditadas.
+
+**Vídeo da aula**  
+Referência a um vídeo do YouTube ou do Panda, informada como ID ou URL e normalizada.
+A validação confere apenas o formato, não a existência do vídeo.
 
 ## Gestão de acesso
 
