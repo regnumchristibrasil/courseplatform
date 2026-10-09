@@ -4,7 +4,7 @@
 -- arquivado, e a reproducao; apos a expiracao, tudo some. O publico segue
 -- vendo apenas itens ativos de cursos publicados.
 BEGIN;
-SELECT plan(26);
+SELECT plan(29);
 
 -- Fixtures --------------------------------------------------------------
 INSERT INTO auth.users (id, email) VALUES
@@ -31,9 +31,11 @@ INSERT INTO public.lessons (id, course_id, module_id, title, position, is_free_p
   ('d1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-0000000000d1', 'd0000000-0000-0000-0000-000000000001', 'D1 active', 1, false, NULL),
   ('d1000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-0000000000d1', 'd0000000-0000-0000-0000-000000000001', 'D1 archived', 2, false, now()),
   ('d1000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-0000000000d1', 'd0000000-0000-0000-0000-000000000002', 'D2 in archived module', 1, false, NULL),
+  ('d1000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-0000000000d1', 'd0000000-0000-0000-0000-000000000001', 'D1 preview', 3, true, NULL),
   ('a1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-0000000000a1', 'a0000000-0000-0000-0000-000000000001', 'R1 active', 1, false, NULL),
   ('a1000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-0000000000a1', 'a0000000-0000-0000-0000-000000000001', 'R1 archived', 2, false, now()),
   ('a1000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-0000000000a1', 'a0000000-0000-0000-0000-000000000002', 'R2 in archived module', 1, false, NULL),
+  ('a1000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-0000000000a1', 'a0000000-0000-0000-0000-000000000001', 'R1 preview', 3, true, NULL),
   ('b1000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-0000000000b1', 'b0000000-0000-0000-0000-000000000001', 'P1 active', 1, false, NULL),
   ('b1000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-0000000000b1', 'b0000000-0000-0000-0000-000000000001', 'P1 archived', 2, false, now()),
   ('b1000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-0000000000b1', 'b0000000-0000-0000-0000-000000000001', 'P1 preview', 3, true, NULL),
@@ -44,6 +46,8 @@ INSERT INTO app_private.lesson_assets (lesson_id, provider, external_ref, is_act
   ('d1000000-0000-0000-0000-000000000002', 'youtube', 'yt-d-archived-lesson', true),
   ('d1000000-0000-0000-0000-000000000003', 'youtube', 'yt-d-archived-module', true),
   ('a1000000-0000-0000-0000-000000000002', 'youtube', 'yt-r-archived-lesson', true),
+  ('d1000000-0000-0000-0000-000000000004', 'youtube', 'yt-d-preview', true),
+  ('a1000000-0000-0000-0000-000000000004', 'youtube', 'yt-r-preview', true),
   ('b1000000-0000-0000-0000-000000000001', 'youtube', 'yt-p-active', true),
   ('b1000000-0000-0000-0000-000000000003', 'youtube', 'yt-p-preview', true),
   ('b1000000-0000-0000-0000-000000000004', 'youtube', 'yt-p-preview-archived', true);
@@ -105,6 +109,14 @@ SELECT is(
   (SELECT count(*)::int FROM app.get_playable_ref('b1000000-0000-0000-0000-000000000004'::uuid)),
   0, 'free preview of an archived lesson does not play for a non-enrolled user'
 );
+SELECT is(
+  (SELECT count(*)::int FROM app.get_playable_ref('d1000000-0000-0000-0000-000000000004'::uuid)),
+  0, 'free preview of a draft course does not play for a non-enrolled user'
+);
+SELECT is(
+  (SELECT count(*)::int FROM app.get_playable_ref('a1000000-0000-0000-0000-000000000004'::uuid)),
+  0, 'free preview of an archived course does not play for a non-enrolled user'
+);
 RESET ROLE;
 
 -- Matriculado valido: ve e toca tudo, mesmo arquivado/despublicado --------
@@ -116,7 +128,7 @@ SELECT is(
 );
 SELECT is(
   (SELECT count(*)::int FROM public.lessons WHERE course_id IN ('c0000000-0000-0000-0000-0000000000d1', 'c0000000-0000-0000-0000-0000000000a1')),
-  6, 'enrolled student reads all lessons (archived included) of draft and archived courses'
+  8, 'enrolled student reads all lessons (archived included) of draft and archived courses'
 );
 SELECT is(
   (SELECT count(*)::int FROM public.lessons WHERE course_id = 'c0000000-0000-0000-0000-0000000000b1'),
@@ -126,6 +138,11 @@ SELECT results_eq(
   $$ SELECT external_ref FROM app.get_playable_ref('d1000000-0000-0000-0000-000000000001'::uuid) $$,
   $$ VALUES ('yt-d-active'::text) $$,
   'enrolled student plays an active lesson of a draft course'
+);
+SELECT results_eq(
+  $$ SELECT external_ref FROM app.get_playable_ref('d1000000-0000-0000-0000-000000000004'::uuid) $$,
+  $$ VALUES ('yt-d-preview'::text) $$,
+  'enrolled student still plays the free preview of a draft course'
 );
 SELECT results_eq(
   $$ SELECT external_ref FROM app.get_playable_ref('d1000000-0000-0000-0000-000000000002'::uuid) $$,
@@ -195,7 +212,7 @@ SELECT is(
 );
 SELECT is(
   (SELECT count(*)::int FROM public.lessons WHERE course_id = 'c0000000-0000-0000-0000-0000000000a1'),
-  3, 'a still-valid enrollment in another course is unaffected'
+  4, 'a still-valid enrollment in another course is unaffected'
 );
 RESET ROLE;
 
