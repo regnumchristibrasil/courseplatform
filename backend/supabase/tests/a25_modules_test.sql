@@ -212,7 +212,7 @@ SELECT lives_ok(
 );
 RESET ROLE;
 
--- get_playable_ref ignora arquivados -------------------------------------
+-- get_playable_ref: arquivados tocam so para matriculado (A26) ---------
 INSERT INTO app_private.lesson_assets (lesson_id, provider, external_ref, is_active) VALUES
   ('11111111-2222-3333-4444-000000000001', 'youtube', 'yt-active', true),
   ('11111111-2222-3333-4444-000000000004', 'youtube', 'yt-archived-lesson', true),
@@ -227,15 +227,15 @@ SELECT results_eq(
   $$ VALUES ('yt-active'::text) $$,
   'an enrolled user still resolves an active lesson of an active module'
 );
-SELECT is(
-  (SELECT count(*)::int FROM app.get_playable_ref('11111111-2222-3333-4444-000000000004'::uuid)),
-  0,
-  'an archived lesson resolves to zero rows even for an enrolled user'
+SELECT results_eq(
+  $$ SELECT external_ref FROM app.get_playable_ref('11111111-2222-3333-4444-000000000004'::uuid) $$,
+  $$ VALUES ('yt-archived-lesson'::text) $$,
+  'an archived lesson still plays for an enrolled user (A26)'
 );
-SELECT is(
-  (SELECT count(*)::int FROM app.get_playable_ref('11111111-2222-3333-4444-000000000005'::uuid)),
-  0,
-  'a lesson of an archived module resolves to zero rows even for an enrolled user'
+SELECT results_eq(
+  $$ SELECT external_ref FROM app.get_playable_ref('11111111-2222-3333-4444-000000000005'::uuid) $$,
+  $$ VALUES ('yt-archived-module'::text) $$,
+  'a lesson of an archived module still plays for an enrolled user (A26)'
 );
 RESET ROLE;
 
