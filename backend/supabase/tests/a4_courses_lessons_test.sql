@@ -33,11 +33,16 @@ INSERT INTO public.courses (id, title, price_cents, status, access_duration_days
   ('c0000000-0000-0000-0000-000000000002', 'Published Course', 20000, 'published', 365),
   ('c0000000-0000-0000-0000-000000000003', 'Archived Course', 30000, 'archived', NULL);
 
-INSERT INTO public.lessons (course_id, title, position) VALUES
-  ('c0000000-0000-0000-0000-000000000001', 'Draft Lesson 1', 1),
-  ('c0000000-0000-0000-0000-000000000002', 'Published Lesson 1', 1),
-  ('c0000000-0000-0000-0000-000000000002', 'Published Lesson 2', 2),
-  ('c0000000-0000-0000-0000-000000000003', 'Archived Lesson 1', 1);
+INSERT INTO public.modules (id, course_id, title, position) VALUES
+  ('a4000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Draft Module', 1),
+  ('a4000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000002', 'Published Module', 1),
+  ('a4000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000003', 'Archived Module', 1);
+
+INSERT INTO public.lessons (course_id, module_id, title, position) VALUES
+  ('c0000000-0000-0000-0000-000000000001', 'a4000000-0000-0000-0000-000000000001', 'Draft Lesson 1', 1),
+  ('c0000000-0000-0000-0000-000000000002', 'a4000000-0000-0000-0000-000000000002', 'Published Lesson 1', 1),
+  ('c0000000-0000-0000-0000-000000000002', 'a4000000-0000-0000-0000-000000000002', 'Published Lesson 2', 2),
+  ('c0000000-0000-0000-0000-000000000003', 'a4000000-0000-0000-0000-000000000003', 'Archived Lesson 1', 1);
 
 -- anon: SELECT sees only published courses/lessons. Counts are scoped to
 -- this test's own fixture ids (via a WHERE/IN filter) rather than the bare
@@ -88,7 +93,7 @@ SELECT throws_ok(
   'anon DELETE on public.courses is denied'
 );
 SELECT throws_ok(
-  $$ INSERT INTO public.lessons (course_id, title, position) VALUES ('c0000000-0000-0000-0000-000000000002', 'x', 3) $$,
+  $$ INSERT INTO public.lessons (course_id, module_id, title, position) VALUES ('c0000000-0000-0000-0000-000000000002', 'a4000000-0000-0000-0000-000000000002', 'x', 3) $$,
   NULL, NULL,
   'anon INSERT on public.lessons is denied'
 );
@@ -128,7 +133,7 @@ SELECT throws_ok(
   'authenticated DELETE on public.courses is denied'
 );
 SELECT throws_ok(
-  $$ INSERT INTO public.lessons (course_id, title, position) VALUES ('c0000000-0000-0000-0000-000000000002', 'x', 3) $$,
+  $$ INSERT INTO public.lessons (course_id, module_id, title, position) VALUES ('c0000000-0000-0000-0000-000000000002', 'a4000000-0000-0000-0000-000000000002', 'x', 3) $$,
   NULL, NULL,
   'authenticated INSERT on public.lessons is denied'
 );
@@ -167,8 +172,10 @@ SELECT is(
   1,
   'service_role can INSERT a course'
 );
-INSERT INTO public.lessons (course_id, title, position) VALUES
-  ('c0000000-0000-0000-0000-000000000004', 'Service-role-created lesson', 1);
+INSERT INTO public.modules (id, course_id, title, position) VALUES
+  ('a4000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000004', 'Service-role-created module', 1);
+INSERT INTO public.lessons (course_id, module_id, title, position) VALUES
+  ('c0000000-0000-0000-0000-000000000004', 'a4000000-0000-0000-0000-000000000004', 'Service-role-created lesson', 1);
 SELECT is(
   (SELECT count(*)::int FROM public.lessons WHERE course_id = 'c0000000-0000-0000-0000-000000000004'),
   1,

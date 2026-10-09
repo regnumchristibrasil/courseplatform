@@ -14,10 +14,13 @@ INSERT INTO auth.users (id, email) VALUES
 INSERT INTO public.courses (id, title, price_cents, status) VALUES
   ('c0000000-0000-0000-0000-00000000000a', 'Video Course', 10000, 'published');
 
-INSERT INTO public.lessons (id, course_id, title, position, is_free_preview) VALUES
-  ('11111111-2222-3333-4444-555555555501', 'c0000000-0000-0000-0000-00000000000a', 'Regular Lesson', 1, false),
-  ('11111111-2222-3333-4444-555555555502', 'c0000000-0000-0000-0000-00000000000a', 'Free Preview Lesson', 2, true),
-  ('11111111-2222-3333-4444-555555555503', 'c0000000-0000-0000-0000-00000000000a', 'Inactive-Asset-Only Lesson', 3, false);
+INSERT INTO public.modules (id, course_id, title, position) VALUES
+  ('a1100000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-00000000000a', 'Module 1', 1);
+
+INSERT INTO public.lessons (id, course_id, module_id, title, position, is_free_preview) VALUES
+  ('11111111-2222-3333-4444-555555555501', 'c0000000-0000-0000-0000-00000000000a', 'a1100000-0000-0000-0000-000000000001', 'Regular Lesson', 1, false),
+  ('11111111-2222-3333-4444-555555555502', 'c0000000-0000-0000-0000-00000000000a', 'a1100000-0000-0000-0000-000000000001', 'Free Preview Lesson', 2, true),
+  ('11111111-2222-3333-4444-555555555503', 'c0000000-0000-0000-0000-00000000000a', 'a1100000-0000-0000-0000-000000000001', 'Inactive-Asset-Only Lesson', 3, false);
 
 INSERT INTO app_private.lesson_assets (lesson_id, provider, external_ref, is_active) VALUES
   ('11111111-2222-3333-4444-555555555501', 'youtube', 'yt-regular', true),

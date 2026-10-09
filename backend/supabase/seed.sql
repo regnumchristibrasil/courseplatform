@@ -33,12 +33,18 @@ insert into public.courses (id, title, description, price_cents, status, access_
     null
   );
 
-insert into public.lessons (id, course_id, title, position, duration_seconds, is_free_preview) values
-  ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'Boas-vindas e visão geral', 1, 300, true),
-  ('e0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'O que é discernimento?', 2, 900, false),
-  ('e0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001', 'Exercícios práticos', 3, 1200, false),
-  ('e0000000-0000-0000-0000-000000000004', 'd0000000-0000-0000-0000-000000000002', 'Fundamentos da liderança', 1, 600, true),
-  ('e0000000-0000-0000-0000-000000000005', 'd0000000-0000-0000-0000-000000000002', 'Liderança a serviço', 2, 900, false);
+-- Um modulo padrao por curso, como o backfill da migration A25.
+insert into public.modules (id, course_id, title, position) values
+  ('f0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'Conteúdo do curso', 1),
+  ('f0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000002', 'Conteúdo do curso', 1),
+  ('f0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000003', 'Conteúdo do curso', 1);
+
+insert into public.lessons (id, course_id, module_id, title, position, duration_seconds, is_free_preview) values
+  ('e0000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000001', 'Boas-vindas e visão geral', 1, 300, true),
+  ('e0000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000001', 'O que é discernimento?', 2, 900, false),
+  ('e0000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001', 'f0000000-0000-0000-0000-000000000001', 'Exercícios práticos', 3, 1200, false),
+  ('e0000000-0000-0000-0000-000000000004', 'd0000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000002', 'Fundamentos da liderança', 1, 600, true),
+  ('e0000000-0000-0000-0000-000000000005', 'd0000000-0000-0000-0000-000000000002', 'f0000000-0000-0000-0000-000000000002', 'Liderança a serviço', 2, 900, false);
 
 -- YouTube-phase video references (placeholder ids -- not real videos).
 -- All active; none pre-seeded as inactive/backfilled since no migration to
