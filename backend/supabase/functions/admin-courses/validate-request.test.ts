@@ -75,3 +75,35 @@ Deno.test('create rejects update-only fields', () => {
   invalid({ ...create, courseId: COURSE_ID });
   invalid({ ...create, expectedUpdatedAt: UPDATED_AT });
 });
+
+const setStatus = {
+  action: 'set_status' as const,
+  courseId: COURSE_ID,
+  expectedUpdatedAt: UPDATED_AT,
+  status: 'published' as const,
+};
+const remove = { action: 'delete' as const, courseId: COURSE_ID, expectedUpdatedAt: UPDATED_AT };
+
+Deno.test('accepts set_status for each known status', () => {
+  for (const status of ['draft', 'published', 'archived'] as const) {
+    assertEquals(validateCourseRequest({ ...setStatus, status }), { ...setStatus, status });
+  }
+});
+
+Deno.test('rejects a bad set_status request', () => {
+  invalid({ ...setStatus, status: 'deleted' });
+  invalid({ ...setStatus, status: null });
+  invalid({ ...setStatus, courseId: 'nope' });
+  invalid({ ...setStatus, expectedUpdatedAt: 'yesterday' });
+  invalid({ ...setStatus, title: 'x' });
+  invalid({ ...setStatus, actorId: COURSE_ID });
+  const { status: _status, ...missing } = setStatus;
+  invalid(missing);
+});
+
+Deno.test('accepts a delete request and rejects extra or missing fields', () => {
+  assertEquals(validateCourseRequest(remove), remove);
+  invalid({ ...remove, status: 'draft' });
+  invalid({ ...remove, courseId: 5 });
+  invalid({ action: 'delete', courseId: COURSE_ID });
+});

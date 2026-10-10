@@ -18,7 +18,7 @@ INSERT INTO public.courses (id, title, price_cents, status) VALUES
   ('c0000000-0000-0000-0000-0000000000d1', 'Draft D', 10000, 'draft'),
   ('c0000000-0000-0000-0000-0000000000e1', 'Other E', 10000, 'draft'),
   ('c0000000-0000-0000-0000-0000000000f1', 'Published P', 10000, 'published'),
-  ('c0000000-0000-0000-0000-0000000000a1', 'Sales S', 10000, 'published');
+  ('c0000000-0000-0000-0000-0000000000a1', 'Sales S', 10000, 'draft');
 
 INSERT INTO public.modules (id, course_id, title, position) VALUES
   ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-0000000000d1', 'D1', 1),

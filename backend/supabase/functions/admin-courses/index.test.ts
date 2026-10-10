@@ -225,3 +225,122 @@ Deno.test('response is JSON and carries no secrets', async () => {
   assert(response.headers.get('Content-Type')?.includes('application/json'));
   assertFalse((await response.text()).includes(JWT));
 });
+
+const LESSON_ID = '33333333-3333-4333-8333-333333333333';
+const statusBody = {
+  action: 'set_status',
+  courseId: COURSE_ID,
+  expectedUpdatedAt: UPDATED_AT,
+  status: 'published',
+};
+const deleteBody = { action: 'delete', courseId: COURSE_ID, expectedUpdatedAt: UPDATED_AT };
+
+Deno.test('set_status calls staff_set_course_status and emits a sanitized status event', async () => {
+  const { deps, rpcCalls, captures } = setup({
+    rpc: {
+      data: [{ id: COURSE_ID, updated_at: NEW_UPDATED_AT, previous_status: 'draft' }],
+      error: null,
+    },
+  });
+  const response = await handleAdminCourses(request(statusBody), deps);
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), { courseId: COURSE_ID, updatedAt: NEW_UPDATED_AT });
+  assertEquals(rpcCalls, [{
+    schema: 'app',
+    fn: 'staff_set_course_status',
+    args: { p_course_id: COURSE_ID, p_expected_updated_at: UPDATED_AT, p_status: 'published' },
+  }]);
+  assertEquals(captures.length, 1);
+  assertEquals(captures[0]?.event, 'admin_course_status_changed');
+  assertEquals(captures[0]?.distinctId, ACTOR_ID);
+  assertEquals(captures[0]?.properties, {
+    course_id: COURSE_ID,
+    actor_user_id: ACTOR_ID,
+    old_status: 'draft',
+    new_status: 'published',
+    request_id: captures[0]?.properties?.request_id,
+  });
+});
+
+Deno.test('set_status with an empty result is a 500', async () => {
+  const { deps } = setup({ rpc: { data: [], error: null } });
+  assertEquals((await handleAdminCourses(request(statusBody), deps)).status, 500);
+});
+
+Deno.test('invalid_transition is a 409 with the stable code and a denied event', async () => {
+  const { deps, captures } = setup({
+    rpc: { data: null, error: { message: 'invalid_transition', code: 'CR005' } },
+  });
+  const response = await handleAdminCourses(request(statusBody), deps);
+  assertEquals(response.status, 409);
+  assertEquals((await errorOf(response)).code, 'invalid_transition');
+  assertEquals(captures[0]?.event, 'admin_action_denied');
+  assertEquals(captures[0]?.properties?.course_action, 'set_status');
+});
+
+Deno.test('publish_gate_violated returns the violation list from the error DETAIL', async () => {
+  const details = JSON.stringify([
+    { code: 'price_missing' },
+    { code: 'lesson_without_video', lessonId: LESSON_ID },
+  ]);
+  const { deps, captures } = setup({
+    rpc: {
+      data: null,
+      error: { message: 'publish_gate_violated', code: 'CR004', details } as never,
+    },
+  });
+  const response = await handleAdminCourses(request(statusBody), deps);
+  assertEquals(response.status, 409);
+  const body = await response.json();
+  assertEquals(body.error.code, 'publish_gate_violated');
+  assertEquals(body.error.violations, [
+    { code: 'price_missing' },
+    { code: 'lesson_without_video', lessonId: LESSON_ID },
+  ]);
+  assertEquals(captures[0]?.properties?.violation_codes, ['price_missing', 'lesson_without_video']);
+});
+
+Deno.test('malformed or hostile DETAIL yields no violations instead of failing', async () => {
+  for (
+    const details of [
+      'not json',
+      '{"code":"price_missing"}',
+      '[{"code":"drop table"}]',
+      '[{"code":"lesson_without_video","lessonId":"x"}]',
+    ]
+  ) {
+    const { deps } = setup({
+      rpc: {
+        data: null,
+        error: { message: 'publish_gate_violated', code: 'CR004', details } as never,
+      },
+    });
+    const response = await handleAdminCourses(request(statusBody), deps);
+    assertEquals(response.status, 409);
+    assertEquals((await response.json()).error.violations, []);
+  }
+});
+
+Deno.test('delete calls staff_delete_course and emits a deletion event', async () => {
+  const { deps, rpcCalls, captures } = setup({ rpc: { data: null, error: null } });
+  const response = await handleAdminCourses(request(deleteBody), deps);
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), { courseId: COURSE_ID });
+  assertEquals(rpcCalls, [{
+    schema: 'app',
+    fn: 'staff_delete_course',
+    args: { p_course_id: COURSE_ID, p_expected_updated_at: UPDATED_AT },
+  }]);
+  assertEquals(captures.length, 1);
+  assertEquals(captures[0]?.event, 'admin_course_deleted');
+  assertEquals(captures[0]?.properties?.course_id, COURSE_ID);
+  assertEquals(captures[0]?.properties?.actor_user_id, ACTOR_ID);
+});
+
+Deno.test('delete with sales is a 409 course_has_sales and emits no deletion event', async () => {
+  const { deps, captures } = setup({ rpc: { data: null, error: { message: 'course_has_sales' } } });
+  const response = await handleAdminCourses(request(deleteBody), deps);
+  assertEquals(response.status, 409);
+  assertEquals((await errorOf(response)).code, 'course_has_sales');
+  assertEquals(captures.map((c) => c.event), ['admin_action_denied']);
+});

@@ -114,7 +114,32 @@ export type AdminCoursesErrorCode =
   | 'stale_target'
   | 'module_not_empty' // a module that still has lessons cannot be deleted
   | 'course_has_sales' // a course with enrollments or orders only archives
-  | 'publish_gate_violated'; // an active lesson without video in a published course
+  | 'publish_gate_violated' // the publish gate failed; the violation list explains why
+  | 'invalid_transition'; // status change outside the allowed table (or to the same status)
+
+// Why the publish gate failed (ADR 0002, decision 6). Ordered as the server emits
+// them: price, active lessons, then videos in tree order. `lessonId` is set only
+// for lesson_without_video.
+export type GateViolationCode = 'price_missing' | 'no_active_lesson' | 'lesson_without_video';
+
+export interface GateViolation {
+  readonly code: GateViolationCode;
+  readonly lessonId?: string;
+}
+
+export const GATE_VIOLATION_CODES: readonly GateViolationCode[] = [
+  'price_missing',
+  'no_active_lesson',
+  'lesson_without_video',
+];
+
+// Allowed status transitions (ADR 0002, decision 6), mirrored by
+// app.staff_set_course_status. Same status is not a transition.
+export const COURSE_STATUS_TRANSITIONS: Readonly<Record<CourseStatus, readonly CourseStatus[]>> = {
+  draft: ['published'],
+  published: ['draft', 'archived'],
+  archived: ['draft'],
+};
 
 // Field limits mirrored by app_private.assert_valid_course_fields and the
 // courses_price_range CHECK. Change SQL and this file together.
@@ -139,6 +164,7 @@ export const ADMIN_COURSES_ERROR_STATUS: Readonly<Record<AdminCoursesErrorCode, 
   module_not_empty: 409,
   course_has_sales: 409,
   publish_gate_violated: 409,
+  invalid_transition: 409,
 };
 
 // Editable course fields. The editor always sends the full state; a tutor
@@ -161,11 +187,32 @@ export interface UpdateCourseRequest extends CourseFieldsInput {
   readonly expectedUpdatedAt: string;
 }
 
-export type AdminCoursesRequest = CreateCourseRequest | UpdateCourseRequest;
+export interface SetCourseStatusRequest {
+  readonly action: 'set_status';
+  readonly courseId: string;
+  readonly expectedUpdatedAt: string;
+  readonly status: CourseStatus;
+}
+
+export interface DeleteCourseRequest {
+  readonly action: 'delete';
+  readonly courseId: string;
+  readonly expectedUpdatedAt: string;
+}
+
+export type AdminCoursesRequest =
+  | CreateCourseRequest
+  | UpdateCourseRequest
+  | SetCourseStatusRequest
+  | DeleteCourseRequest;
 
 export interface SaveCourseResponse {
   readonly courseId: string;
   readonly updatedAt: string;
+}
+
+export interface DeleteCourseResponse {
+  readonly courseId: string;
 }
 
 const COMMERCIAL_ACTIONS: readonly CourseAction[] = ['edit_price', 'edit_access_duration'];

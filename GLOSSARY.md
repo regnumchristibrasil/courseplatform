@@ -51,8 +51,9 @@ preservado). Transições permitidas: rascunho para publicado; publicado para ra
 arquivado; arquivado para rascunho.
 
 **Portão de publicação**  
-Condição para um curso estar publicado: ao menos uma aula ativa, e toda aula ativa com
-vídeo. Itens arquivados não contam.
+Condição para um curso estar publicado: preço definido, ao menos uma aula ativa, e toda aula
+ativa com vídeo. Itens arquivados (aula ou módulo) não contam. Um curso publicado nunca pode
+ficar fora do portão.
 
 **Arquivamento (de curso, módulo ou aula)**  
 Retirada reversível de um item do catálogo, preservando-o. Substitui a exclusão sempre

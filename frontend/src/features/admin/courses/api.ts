@@ -6,6 +6,7 @@ import {
   type CourseListRow,
   type CourseStatus,
   type CourseTree,
+  type GateViolation,
   type LessonFieldsInput,
   type LessonNode,
   type LessonVideo,
@@ -15,6 +16,7 @@ import {
   type VideoDuplicate,
   type VideoProvider,
 } from '../../../contracts/adminCourses'
+import { parseGateViolations } from './gateViolations'
 
 const APP_SCHEMA = 'app'
 const LIST_RPC = 'staff_list_courses'
@@ -35,18 +37,22 @@ export type AdminCoursesUiErrorCode = AdminCoursesErrorCode | 'internal' | 'unau
 export interface RpcErrorShape {
   readonly message?: string
   readonly hint?: string | null
+  readonly details?: string | null
   readonly code?: string
 }
 
 export class AdminCoursesApiError extends Error {
   readonly code: AdminCoursesUiErrorCode
   readonly requestId?: string
+  // Só em publish_gate_violated: por que o portão de publicação falhou.
+  readonly violations: readonly GateViolation[]
 
-  constructor(code: AdminCoursesUiErrorCode, message: string, requestId?: string) {
+  constructor(code: AdminCoursesUiErrorCode, message: string, requestId?: string, violations: readonly GateViolation[] = []) {
     super(message)
     this.name = 'AdminCoursesApiError'
     this.code = code
     this.requestId = requestId
+    this.violations = violations
   }
 }
 
@@ -65,7 +71,13 @@ export function parseErrorCode(error: RpcErrorShape | null | undefined, status?:
 
 function toApiError(error: RpcErrorShape, status?: number): AdminCoursesApiError {
   const code = parseErrorCode(error, status)
-  return new AdminCoursesApiError(code, code === 'unauthorized' ? SESSION_EXPIRED_MESSAGE : error.message ?? 'Admin courses request failed.')
+  const violations = code === 'publish_gate_violated' ? parseGateViolations(error.details) : []
+  return new AdminCoursesApiError(
+    code,
+    code === 'unauthorized' ? SESSION_EXPIRED_MESSAGE : error.message ?? 'Admin courses request failed.',
+    undefined,
+    violations,
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -196,7 +208,8 @@ async function readEnvelope(error: { message?: string; context?: unknown }): Pro
     const code = isKnownCode(env.code) ? env.code : 'internal'
     const message = typeof env.message === 'string' ? env.message : fallback.message
     const requestId = typeof env.requestId === 'string' ? env.requestId : undefined
-    return new AdminCoursesApiError(code, message, requestId)
+    const violations = code === 'publish_gate_violated' ? parseGateViolations(env.violations) : []
+    return new AdminCoursesApiError(code, message, requestId, violations)
   } catch {
     return fallback
   }
@@ -206,6 +219,26 @@ export async function saveCourse(client: SupabaseClient, request: AdminCoursesRe
   const { data, error } = await client.functions.invoke(ADMIN_COURSES_FUNCTION, { body: request })
   if (error) throw await readEnvelope(error)
   return mapSaveResponse(data)
+}
+
+// Muda o status pela Edge Function (que emite o evento de analytics). O servidor
+// aplica a tabela de transições e o portão de publicação.
+export async function setCourseStatus(
+  client: SupabaseClient,
+  courseId: string,
+  expectedUpdatedAt: string,
+  status: CourseStatus,
+): Promise<SaveCourseResponse> {
+  const request: AdminCoursesRequest = { action: 'set_status', courseId, expectedUpdatedAt, status }
+  const { data, error } = await client.functions.invoke(ADMIN_COURSES_FUNCTION, { body: request })
+  if (error) throw await readEnvelope(error)
+  return mapSaveResponse(data)
+}
+
+export async function deleteCourse(client: SupabaseClient, courseId: string, expectedUpdatedAt: string): Promise<void> {
+  const request: AdminCoursesRequest = { action: 'delete', courseId, expectedUpdatedAt }
+  const { error } = await client.functions.invoke(ADMIN_COURSES_FUNCTION, { body: request })
+  if (error) throw await readEnvelope(error)
 }
 
 // Gestão de módulos: RPCs chamadas direto pelo PostgREST com o JWT do usuário

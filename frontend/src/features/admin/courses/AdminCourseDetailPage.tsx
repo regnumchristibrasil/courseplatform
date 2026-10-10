@@ -9,6 +9,7 @@ import { useCurrentAccess } from '../../authz/useCurrentAccess'
 import { AdminCoursesApiError, SESSION_EXPIRED_MESSAGE } from './api'
 import { CourseForm } from './CourseForm'
 import { CourseDetailPanel } from './CourseDetailPanel'
+import { CourseStatusActions } from './CourseStatusActions'
 import { CourseTreeView } from './CourseTreeView'
 import { AddLessonAction, LessonActions } from './LessonActions'
 import { LessonVideoAction } from './LessonVideoAction'
@@ -81,6 +82,8 @@ export function AdminCourseDetailPage() {
   const role = useCurrentAccess().data?.role
   const canEdit = role !== undefined && canPerformCourseAction(role, 'edit_details')
   const canEditContent = role !== undefined && canPerformCourseAction(role, 'edit_content')
+  const canChangeStatus = role !== undefined && canPerformCourseAction(role, 'change_status')
+  const canDelete = role !== undefined && canPerformCourseAction(role, 'delete')
   const tree = query.data
   const resolved = tree ? resolveSelection(tree, selection) : null
   const editingCourse = editing && tree !== undefined && resolved?.kind === 'course'
@@ -105,6 +108,9 @@ export function AdminCourseDetailPage() {
           ) : resolved ? (
             <div className={styles.side}>
               <CourseDetailPanel tree={tree} selection={resolved} onEdit={canEdit ? () => setEditing(true) : undefined} />
+              {resolved?.kind === 'course' ? (
+                <CourseStatusActions tree={tree} canChangeStatus={canChangeStatus} canDelete={canDelete} />
+              ) : null}
               {canEditContent && resolved?.kind === 'course' ? <AddModuleAction courseId={tree.courseId} /> : null}
               {canEditContent && resolved?.kind === 'module' ? (
                 <>

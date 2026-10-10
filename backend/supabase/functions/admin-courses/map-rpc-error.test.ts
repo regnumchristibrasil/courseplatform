@@ -19,13 +19,14 @@ Deno.test('statuses come from the shared contract', () => {
   }
 });
 
-Deno.test('every errcode/message pair raised in a30/a31/a32 matches SQLSTATE_TO_CODE', async () => {
+Deno.test('every errcode/message pair raised in a30-a34 matches SQLSTATE_TO_CODE', async () => {
   const seen = new Map<string, string>();
   for (
     const file of [
       '20261009170000_a30_staff_course_write.sql',
       '20261010120000_a31_staff_module_write.sql',
       '20261010130000_a32_staff_lesson_write.sql',
+      '20261010150000_a34_course_status_gate.sql',
     ]
   ) {
     const sql = await Deno.readTextFile(new URL(`../../migrations/${file}`, import.meta.url));
@@ -39,4 +40,12 @@ Deno.test('every errcode/message pair raised in a30/a31/a32 matches SQLSTATE_TO_
     }
   }
   assertEquals([...seen.keys()].sort(), Object.keys(SQLSTATE_TO_CODE).sort());
+});
+
+Deno.test('CR005 maps to invalid_transition (409)', () => {
+  assertEquals(mapRpcError({ code: 'CR005' }), { code: 'invalid_transition', status: 409 });
+  assertEquals(mapRpcError({ message: 'invalid_transition' }), {
+    code: 'invalid_transition',
+    status: 409,
+  });
 });

@@ -1,8 +1,10 @@
 import { assertEquals } from '@std/assert';
 import {
+  ADMIN_COURSES_ERROR_STATUS,
   COURSE_ACTIONS,
   COURSE_PERMISSION_MATRIX,
   COURSE_ROLES,
+  COURSE_STATUS_TRANSITIONS,
   type CourseAction,
   type CourseActorRole,
   evaluateCoursePermission,
@@ -40,3 +42,17 @@ for (const role of COURSE_ROLES) {
     });
   }
 }
+
+// Written by hand from the glossary ("Status do curso"), not derived from the code.
+Deno.test('status transitions are exactly draft->published, published->draft|archived, archived->draft', () => {
+  assertEquals(COURSE_STATUS_TRANSITIONS, {
+    draft: ['published'],
+    published: ['draft', 'archived'],
+    archived: ['draft'],
+  });
+});
+
+Deno.test('invalid_transition and publish_gate_violated are conflicts (409)', () => {
+  assertEquals(ADMIN_COURSES_ERROR_STATUS.invalid_transition, 409);
+  assertEquals(ADMIN_COURSES_ERROR_STATUS.publish_gate_violated, 409);
+});

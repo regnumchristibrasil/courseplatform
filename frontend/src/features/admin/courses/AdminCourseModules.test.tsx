@@ -270,6 +270,17 @@ describe('deleting a module', () => {
     expect(await screen.findByText(/ainda tem aulas/)).toBeInTheDocument()
   })
 
+  it('explains that a published course must keep an active lesson with video', async () => {
+    vi.mocked(setModuleArchived).mockRejectedValue(new AdminCoursesApiError('publish_gate_violated', 'publish_gate_violated'))
+    const user = userEvent.setup()
+    renderPage()
+
+    const panel = await selectModule(user, 'm2')
+    await user.click(within(panel).getByRole('button', { name: 'Arquivar' }))
+
+    expect(await screen.findByText(/ao menos uma aula ativa/)).toBeInTheDocument()
+  })
+
   it('explains that a course with sales only archives', async () => {
     vi.mocked(deleteModule).mockRejectedValue(new AdminCoursesApiError('course_has_sales', 'course_has_sales'))
     const user = userEvent.setup()

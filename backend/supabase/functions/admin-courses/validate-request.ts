@@ -1,5 +1,7 @@
 import {
   type AdminCoursesRequest,
+  COURSE_STATUS_TRANSITIONS,
+  type CourseStatus,
   MAX_ACCESS_DURATION_DAYS,
   MAX_COURSE_DESCRIPTION_LENGTH,
   MAX_COURSE_TITLE_LENGTH,
@@ -23,7 +25,10 @@ const FIELD_NAMES = ['action', 'title', 'description', 'priceCents', 'accessDura
 const FIELDS_BY_ACTION: Readonly<Record<string, ReadonlySet<string>>> = {
   create: new Set(FIELD_NAMES),
   update: new Set([...FIELD_NAMES, 'courseId', 'expectedUpdatedAt']),
+  set_status: new Set(['action', 'courseId', 'expectedUpdatedAt', 'status']),
+  delete: new Set(['action', 'courseId', 'expectedUpdatedAt']),
 };
+const COURSE_STATUSES = Object.keys(COURSE_STATUS_TRANSITIONS) as readonly CourseStatus[];
 
 function fail(message: string): never {
   throw new InvalidCourseRequestError(message);
@@ -37,6 +42,28 @@ function nullableInt(value: unknown, name: string, min: number, max: number): nu
   return value;
 }
 
+function targetOf(
+  record: Record<string, unknown>,
+): { courseId: string; expectedUpdatedAt: string } {
+  const { courseId, expectedUpdatedAt } = record;
+  if (typeof courseId !== 'string' || !UUID_PATTERN.test(courseId)) fail('courseId must be a uuid');
+  if (typeof expectedUpdatedAt !== 'string' || !TIMESTAMP_PATTERN.test(expectedUpdatedAt)) {
+    fail('expectedUpdatedAt must be an ISO timestamp string');
+  }
+  return { courseId, expectedUpdatedAt };
+}
+
+function validateTargetRequest(
+  record: Record<string, unknown>,
+  action: 'set_status' | 'delete',
+): AdminCoursesRequest {
+  const target = targetOf(record);
+  if (action === 'delete') return { action, ...target };
+  const status = COURSE_STATUSES.find((candidate) => candidate === record.status);
+  if (status === undefined) fail(`status must be one of ${COURSE_STATUSES.join(', ')}`);
+  return { action, ...target, status };
+}
+
 // Validacao estrita na fronteira: campos desconhecidos (inclusive qualquer
 // identidade de ator) sao rejeitados; o ator vem somente do JWT.
 export function validateCourseRequest(body: unknown): AdminCoursesRequest {
@@ -46,8 +73,10 @@ export function validateCourseRequest(body: unknown): AdminCoursesRequest {
   const record = body as Record<string, unknown>;
   const action = record.action;
   const allowed = typeof action === 'string' ? FIELDS_BY_ACTION[action] : undefined;
-  if (allowed === undefined) fail("action must be 'create' or 'update'");
+  if (allowed === undefined) fail("action must be 'create', 'update', 'set_status' or 'delete'");
   if (Object.keys(record).some((key) => !allowed.has(key))) fail('Unknown fields in request body');
+
+  if (action === 'set_status' || action === 'delete') return validateTargetRequest(record, action);
 
   const { title, description } = record;
   if (
@@ -75,10 +104,5 @@ export function validateCourseRequest(body: unknown): AdminCoursesRequest {
   };
   if (action === 'create') return { action, ...fields };
 
-  const { courseId, expectedUpdatedAt } = record;
-  if (typeof courseId !== 'string' || !UUID_PATTERN.test(courseId)) fail('courseId must be a uuid');
-  if (typeof expectedUpdatedAt !== 'string' || !TIMESTAMP_PATTERN.test(expectedUpdatedAt)) {
-    fail('expectedUpdatedAt must be an ISO timestamp string');
-  }
-  return { action: 'update', courseId, expectedUpdatedAt, ...fields };
+  return { action: 'update', ...targetOf(record), ...fields };
 }

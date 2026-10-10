@@ -13,6 +13,8 @@ export function describeModuleError(error: unknown): string {
       return 'Módulo não encontrado. Os dados foram recarregados.'
     case 'module_not_empty':
       return 'Este módulo ainda tem aulas e não pode ser excluído. Arquive-o ou retire as aulas antes.'
+    case 'publish_gate_violated':
+      return 'Em um curso publicado, é preciso manter ao menos uma aula ativa, e toda aula ativa precisa de vídeo. Despublique o curso ou ajuste as aulas antes.'
     case 'course_has_sales':
       return 'Este curso tem matrículas ou pedidos, então seus módulos só podem ser arquivados.'
     case 'unauthorized':

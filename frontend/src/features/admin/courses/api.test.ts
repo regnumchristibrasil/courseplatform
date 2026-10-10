@@ -4,6 +4,7 @@ import {
   addLesson,
   addModule,
   AdminCoursesApiError,
+  deleteCourse,
   deleteLesson,
   deleteModule,
   getStaffCourse,
@@ -16,6 +17,7 @@ import {
   reorderLessons,
   reorderModules,
   saveCourse,
+  setCourseStatus,
   setLessonArchived,
   setLessonVideo,
   setModuleArchived,
@@ -488,5 +490,67 @@ describe('setLessonVideo', () => {
     await expect(setLessonVideo(invalid.client, 'l1', TOKEN, 'x')).rejects.toMatchObject({ code: 'invalid_input' })
     const stale = rpcClient({ data: null, error: { message: 'stale_target', code: 'CR001' } })
     await expect(setLessonVideo(stale.client, 'l1', TOKEN, 'dQw4w9WgXcQ')).rejects.toMatchObject({ code: 'stale_target' })
+  })
+})
+
+describe('setCourseStatus', () => {
+  it('invokes admin-courses with set_status and maps the response', async () => {
+    const { client, invoke } = functionsClient({ data: { courseId: 'c1', updatedAt: '2026-10-10T10:00:00.000001+00:00' }, error: null })
+    await expect(setCourseStatus(client, 'c1', '2026-01-02T00:00:00.000001+00:00', 'published')).resolves.toEqual({
+      courseId: 'c1',
+      updatedAt: '2026-10-10T10:00:00.000001+00:00',
+    })
+    expect(invoke).toHaveBeenCalledWith('admin-courses', {
+      body: { action: 'set_status', courseId: 'c1', expectedUpdatedAt: '2026-01-02T00:00:00.000001+00:00', status: 'published' },
+    })
+  })
+
+  it('carries the gate violations of a publish_gate_violated envelope', async () => {
+    const body = {
+      error: {
+        code: 'publish_gate_violated',
+        message: 'm',
+        requestId: 'r1',
+        violations: [{ code: 'price_missing' }, { code: 'lesson_without_video', lessonId: 'l1' }, { code: 'bogus' }, 'junk'],
+      },
+    }
+    const { client } = functionsClient({ data: null, error: { message: 'x', context: new Response(JSON.stringify(body), { status: 409 }) } })
+    const error = await setCourseStatus(client, 'c1', 't', 'published').catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AdminCoursesApiError)
+    expect(error).toMatchObject({
+      code: 'publish_gate_violated',
+      violations: [{ code: 'price_missing' }, { code: 'lesson_without_video', lessonId: 'l1' }],
+    })
+  })
+
+  it('maps invalid_transition and defaults violations to an empty list', async () => {
+    const body = { error: { code: 'invalid_transition', message: 'm', requestId: 'r1' } }
+    const { client } = functionsClient({ data: null, error: { message: 'x', context: new Response(JSON.stringify(body), { status: 409 }) } })
+    await expect(setCourseStatus(client, 'c1', 't', 'archived')).rejects.toMatchObject({ code: 'invalid_transition', violations: [] })
+  })
+})
+
+describe('deleteCourse', () => {
+  it('invokes admin-courses with delete', async () => {
+    const { client, invoke } = functionsClient({ data: { courseId: 'c1' }, error: null })
+    await expect(deleteCourse(client, 'c1', 't')).resolves.toBeUndefined()
+    expect(invoke).toHaveBeenCalledWith('admin-courses', { body: { action: 'delete', courseId: 'c1', expectedUpdatedAt: 't' } })
+  })
+
+  it('surfaces course_has_sales', async () => {
+    const body = { error: { code: 'course_has_sales', message: 'm', requestId: 'r1' } }
+    const { client } = functionsClient({ data: null, error: { message: 'x', context: new Response(JSON.stringify(body), { status: 409 }) } })
+    await expect(deleteCourse(client, 'c1', 't')).rejects.toMatchObject({ code: 'course_has_sales' })
+  })
+})
+
+describe('direct RPC gate violations', () => {
+  it('parses the DETAIL of a publish_gate_violated RPC error', async () => {
+    const details = JSON.stringify([{ code: 'no_active_lesson' }])
+    const { client } = rpcClient({ data: null, error: { message: 'publish_gate_violated', details } })
+    await expect(setLessonArchived(client, 'l1', 't', true)).rejects.toMatchObject({
+      code: 'publish_gate_violated',
+      violations: [{ code: 'no_active_lesson' }],
+    })
   })
 })

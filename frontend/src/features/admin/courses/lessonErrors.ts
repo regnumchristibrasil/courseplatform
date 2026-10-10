@@ -14,7 +14,7 @@ export function describeLessonError(error: unknown): string {
     case 'course_has_sales':
       return 'Este curso tem matrículas ou pedidos, então suas aulas só podem ser arquivadas.'
     case 'publish_gate_violated':
-      return 'Em um curso publicado, toda aula ativa precisa de um vídeo. Crie a aula arquivada primeiro ou defina o vídeo antes de ativá-la.'
+      return 'Em um curso publicado, é preciso manter ao menos uma aula ativa e toda aula ativa precisa de um vídeo. Despublique o curso, ou defina o vídeo antes de ativar a aula.'
     case 'unauthorized':
       return SESSION_EXPIRED_MESSAGE
     default:

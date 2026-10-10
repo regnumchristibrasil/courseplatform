@@ -1,14 +1,20 @@
-// admin-courses Edge Function -- acoes `create` e `update` de curso.
+// admin-courses Edge Function -- acoes `create`, `update`, `set_status` e `delete`.
 //
 // A autorizacao, as invariantes (matriz de papeis, preco/duracao so admin,
 // locking otimista) e a auditoria vivem no banco (app.staff_create_course /
 // app.staff_update_course, chamadas com o cliente do CALLER). Esta funcao
-// existe para emitir os eventos de analytics do servidor (mudanca de preco e
-// duracao, acoes negadas), sem titulo nem dados pessoais. O ator vem SOMENTE
+// existe para emitir os eventos de analytics do servidor (mudanca de preco,
+// duracao e status, exclusao, acoes negadas), sem titulo nem dados pessoais. O ator vem SOMENTE
 // do JWT, nunca do corpo.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { SaveCourseResponse } from '../../../contracts/adminCourses.ts';
+import {
+  ADMIN_COURSES_ERROR_STATUS,
+  type AdminCoursesRequest,
+  type DeleteCourseResponse,
+  type GateViolation,
+  type SaveCourseResponse,
+} from '../../../contracts/adminCourses.ts';
 import { requireEnv } from '../_shared/config.ts';
 import {
   BodyParseError,
@@ -20,6 +26,7 @@ import {
 } from '../_shared/http.ts';
 import { captureAndFlush, type PostHogEnv } from '../_shared/observability.ts';
 import { createCallerClient, MissingAuthorizationError } from '../_shared/supabase.ts';
+import { parseGateViolations } from './gate-violations.ts';
 import { mapRpcError, type RpcErrorLike } from './map-rpc-error.ts';
 import { InvalidCourseRequestError, validateCourseRequest } from './validate-request.ts';
 
@@ -42,6 +49,60 @@ interface RpcRow {
   readonly access_duration_changed?: unknown;
   readonly previous_price_cents?: unknown;
   readonly previous_access_duration_days?: unknown;
+  readonly previous_status?: unknown;
+}
+
+function gateViolatedResponse(requestId: string, violations: readonly GateViolation[]): Response {
+  const envelope = {
+    error: {
+      code: 'publish_gate_violated',
+      message: 'Request denied: publish_gate_violated',
+      requestId,
+      violations,
+    },
+  };
+  return jsonResponse(envelope, { status: ADMIN_COURSES_ERROR_STATUS.publish_gate_violated });
+}
+
+interface RpcResult {
+  readonly data: unknown;
+  readonly error: RpcErrorLike | null;
+}
+
+function callRpc(caller: SupabaseClient, input: AdminCoursesRequest): PromiseLike<RpcResult> {
+  const app = caller.schema('app');
+  switch (input.action) {
+    case 'set_status':
+      return app.rpc('staff_set_course_status', {
+        p_course_id: input.courseId,
+        p_expected_updated_at: input.expectedUpdatedAt,
+        p_status: input.status,
+      });
+    case 'delete':
+      return app.rpc('staff_delete_course', {
+        p_course_id: input.courseId,
+        p_expected_updated_at: input.expectedUpdatedAt,
+      });
+    case 'create':
+      return app.rpc('staff_create_course', courseFields(input));
+    case 'update':
+      return app.rpc('staff_update_course', {
+        p_course_id: input.courseId,
+        p_expected_updated_at: input.expectedUpdatedAt,
+        ...courseFields(input),
+      });
+  }
+}
+
+function courseFields(
+  input: Extract<AdminCoursesRequest, { readonly action: 'create' | 'update' }>,
+) {
+  return {
+    p_title: input.title,
+    p_description: input.description,
+    p_price_cents: input.priceCents,
+    p_access_duration_days: input.accessDurationDays,
+  };
 }
 
 function unauthorized(requestId: string): Response {
@@ -113,24 +174,12 @@ export async function handleAdminCourses(
     throw error;
   }
 
-  const fields = {
-    p_title: input.title,
-    p_description: input.description,
-    p_price_cents: input.priceCents,
-    p_access_duration_days: input.accessDurationDays,
-  };
-  const courseId = input.action === 'update' ? input.courseId : null;
+  const courseId = input.action === 'create' ? null : input.courseId;
 
   let rpcData: unknown;
   let rpcError: RpcErrorLike | null = null;
   try {
-    const result = input.action === 'create'
-      ? await caller.schema('app').rpc('staff_create_course', fields)
-      : await caller.schema('app').rpc('staff_update_course', {
-        p_course_id: input.courseId,
-        p_expected_updated_at: input.expectedUpdatedAt,
-        ...fields,
-      });
+    const result = await callRpc(caller, input);
     rpcData = result.data;
     rpcError = result.error ?? null;
   } catch (error) {
@@ -162,6 +211,9 @@ export async function handleAdminCourses(
   if (rpcError !== null) {
     const mapped = mapRpcError(rpcError);
     if (mapped === null) return await internalError(rpcError.code ?? 'none');
+    const violations = mapped.code === 'publish_gate_violated'
+      ? parseGateViolations(rpcError.details)
+      : undefined;
     await capture({
       event: 'admin_action_denied',
       distinctId: actorId,
@@ -171,9 +223,10 @@ export async function handleAdminCourses(
         actor_user_id: actorId,
         course_id: courseId,
         course_action: input.action,
+        ...(violations && { violation_codes: violations.map((violation) => violation.code) }),
       },
     });
-    return errorJsonResponse({
+    return violations ? gateViolatedResponse(requestId, violations) : errorJsonResponse({
       code: mapped.code,
       message: `Request denied: ${mapped.code}`,
       requestId,
@@ -181,12 +234,35 @@ export async function handleAdminCourses(
     });
   }
 
+  if (input.action === 'delete') {
+    await capture({
+      event: 'admin_course_deleted',
+      distinctId: actorId,
+      properties: { course_id: input.courseId, actor_user_id: actorId, request_id: requestId },
+    });
+    const deleted: DeleteCourseResponse = { courseId: input.courseId };
+    return jsonResponse(deleted);
+  }
+
   const row = (Array.isArray(rpcData) ? rpcData[0] : undefined) as RpcRow | undefined;
   if (!row || typeof row.id !== 'string' || typeof row.updated_at !== 'string') {
     return await internalError('no_row');
   }
 
-  if (row.price_changed === true) {
+  if (input.action === 'set_status') {
+    await capture({
+      event: 'admin_course_status_changed',
+      distinctId: actorId,
+      properties: {
+        course_id: row.id,
+        actor_user_id: actorId,
+        old_status: row.previous_status ?? null,
+        new_status: input.status,
+        request_id: requestId,
+      },
+    });
+  }
+  if (input.action === 'update' && row.price_changed === true) {
     await capture({
       event: 'admin_course_price_changed',
       distinctId: actorId,
@@ -199,7 +275,7 @@ export async function handleAdminCourses(
       },
     });
   }
-  if (row.access_duration_changed === true) {
+  if (input.action === 'update' && row.access_duration_changed === true) {
     await capture({
       event: 'admin_course_duration_changed',
       distinctId: actorId,

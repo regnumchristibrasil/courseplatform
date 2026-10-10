@@ -7,6 +7,7 @@ export interface RpcErrorLike {
   readonly message?: string;
   readonly code?: string;
   readonly hint?: string;
+  readonly details?: string | null;
 }
 
 export interface MappedRpcError {
@@ -22,6 +23,7 @@ export const SQLSTATE_TO_CODE: Readonly<Record<string, AdminCoursesErrorCode>> =
   'CR002': 'module_not_empty',
   'CR003': 'course_has_sales',
   'CR004': 'publish_gate_violated',
+  'CR005': 'invalid_transition',
 };
 
 const CODES: ReadonlySet<string> = new Set(Object.values(SQLSTATE_TO_CODE));

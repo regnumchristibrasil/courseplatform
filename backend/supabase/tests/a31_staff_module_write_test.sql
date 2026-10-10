@@ -18,7 +18,7 @@ UPDATE app_private.user_access SET is_active = false WHERE user_id = '55555555-5
 -- D: draft sem vendas. S: publicado com matricula (vendas). O: curso com pedido apenas.
 INSERT INTO public.courses (id, title, price_cents, status) VALUES
   ('c0000000-0000-0000-0000-0000000000d1', 'Draft D', 10000, 'draft'),
-  ('c0000000-0000-0000-0000-0000000000a1', 'Sales S', 10000, 'published'),
+  ('c0000000-0000-0000-0000-0000000000a1', 'Sales S', 10000, 'draft'),
   ('c0000000-0000-0000-0000-0000000000a2', 'Order only O', 10000, 'draft');
 
 INSERT INTO public.modules (id, course_id, title, position, archived_at) VALUES
