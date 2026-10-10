@@ -21,7 +21,7 @@ UPDATE app_private.user_access SET is_active = false WHERE user_id = '55555555-5
 -- Curso P: 2 modulos (o primeiro ativo, o segundo arquivado) + modulo vazio.
 INSERT INTO public.courses (id, title, description, price_cents, status, access_duration_days) VALUES
   ('c0000000-0000-0000-0000-0000000000b1', 'Published P', 'Descricao P', 20000, 'published', 365),
-  ('c0000000-0000-0000-0000-0000000000e1', 'Empty E', NULL, 0, 'draft', NULL);
+  ('c0000000-0000-0000-0000-0000000000e1', 'Empty E', NULL, NULL, 'draft', NULL);
 
 -- O backfill so roda na migracao; modulos de fixtures sao criados aqui.
 -- Posicoes inseridas fora de ordem para provar o ORDER BY.
