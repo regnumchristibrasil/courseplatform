@@ -84,12 +84,19 @@ export interface CourseTree extends CourseListRow {
   readonly modules: readonly ModuleNode[]; // ordered by position, archived included
 }
 
-export type AdminCoursesErrorCode = 'forbidden' | 'not_found' | 'invalid_input' | 'stale_target';
+export type AdminCoursesErrorCode =
+  | 'forbidden'
+  | 'not_found'
+  | 'invalid_input'
+  | 'stale_target'
+  | 'module_not_empty' // a module that still has lessons cannot be deleted
+  | 'course_has_sales'; // a course with enrollments or orders only archives
 
 // Field limits mirrored by app_private.assert_valid_course_fields and the
 // courses_price_range CHECK. Change SQL and this file together.
 export const MAX_COURSE_TITLE_LENGTH = 200;
 export const MAX_COURSE_DESCRIPTION_LENGTH = 5000;
+export const MAX_MODULE_TITLE_LENGTH = 200; // mirrored by app_private.assert_valid_module_title
 export const MIN_PRICE_CENTS = 1;
 export const MAX_PRICE_CENTS = 10_000_000; // R$ 100.000,00
 export const MIN_ACCESS_DURATION_DAYS = 1;
@@ -102,6 +109,8 @@ export const ADMIN_COURSES_ERROR_STATUS: Readonly<Record<AdminCoursesErrorCode, 
   not_found: 404,
   invalid_input: 400,
   stale_target: 409,
+  module_not_empty: 409,
+  course_has_sales: 409,
 };
 
 // Editable course fields. The editor always sends the full state; a tutor

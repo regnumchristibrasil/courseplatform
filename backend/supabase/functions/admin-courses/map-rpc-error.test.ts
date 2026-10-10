@@ -19,18 +19,23 @@ Deno.test('statuses come from the shared contract', () => {
   }
 });
 
-Deno.test('every errcode/message pair raised in a30 matches SQLSTATE_TO_CODE', async () => {
-  const sql = await Deno.readTextFile(
-    new URL('../../migrations/20261009170000_a30_staff_course_write.sql', import.meta.url),
-  );
+Deno.test('every errcode/message pair raised in a30/a31 matches SQLSTATE_TO_CODE', async () => {
   const seen = new Map<string, string>();
   for (
-    const [, sqlstate, code] of sql.matchAll(
-      /errcode\s*=\s*'([0-9A-Z]{5})',\s*message\s*=\s*'([a-z_]+)'/g,
-    )
+    const file of [
+      '20261009170000_a30_staff_course_write.sql',
+      '20261010120000_a31_staff_module_write.sql',
+    ]
   ) {
-    assertEquals(SQLSTATE_TO_CODE[sqlstate!], code, `${sqlstate} -> ${code}`);
-    seen.set(sqlstate!, code!);
+    const sql = await Deno.readTextFile(new URL(`../../migrations/${file}`, import.meta.url));
+    for (
+      const [, sqlstate, code] of sql.matchAll(
+        /errcode\s*=\s*'([0-9A-Z]{5})',\s*message\s*=\s*'([a-z_]+)'/g,
+      )
+    ) {
+      assertEquals(SQLSTATE_TO_CODE[sqlstate!], code, `${sqlstate} -> ${code}`);
+      seen.set(sqlstate!, code!);
+    }
   }
   assertEquals([...seen.keys()].sort(), Object.keys(SQLSTATE_TO_CODE).sort());
 });

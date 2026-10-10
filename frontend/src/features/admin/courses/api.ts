@@ -203,3 +203,26 @@ export async function saveCourse(client: SupabaseClient, request: AdminCoursesRe
   if (error) throw await readEnvelope(error)
   return mapSaveResponse(data)
 }
+
+// Gestão de módulos: RPCs chamadas direto pelo PostgREST com o JWT do usuário
+// (ADR 0002, decisão 3). O banco aplica papel, vendas e conflito de lista.
+async function callModuleRpc(client: SupabaseClient, fn: string, args: Record<string, unknown>): Promise<void> {
+  const { error, status } = await client.schema(APP_SCHEMA).rpc(fn, args)
+  if (error) throw toApiError(error, status)
+}
+
+export const addModule = (client: SupabaseClient, courseId: string, title: string) =>
+  callModuleRpc(client, 'staff_add_module', { p_course_id: courseId, p_title: title })
+
+export const renameModule = (client: SupabaseClient, moduleId: string, title: string) =>
+  callModuleRpc(client, 'staff_rename_module', { p_module_id: moduleId, p_title: title })
+
+// Lista completa e ordenada (arquivados inclusos); lista desatualizada -> stale_target.
+export const reorderModules = (client: SupabaseClient, courseId: string, moduleIds: readonly string[]) =>
+  callModuleRpc(client, 'staff_reorder_modules', { p_course_id: courseId, p_module_ids: moduleIds })
+
+export const setModuleArchived = (client: SupabaseClient, moduleId: string, archived: boolean) =>
+  callModuleRpc(client, 'staff_set_module_archived', { p_module_id: moduleId, p_archived: archived })
+
+export const deleteModule = (client: SupabaseClient, moduleId: string) =>
+  callModuleRpc(client, 'staff_delete_module', { p_module_id: moduleId })

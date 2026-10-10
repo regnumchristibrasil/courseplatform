@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CourseTree, LessonNode, ModuleNode } from '../../../contracts/adminCourses'
-import { COURSE_ENTRY_KEY, entryKey, flattenTree, nextFocusKey, resolveSelection } from './courseTreeModel'
+import { COURSE_ENTRY_KEY, entryKey, flattenTree, moveModule, nextFocusKey, resolveSelection } from './courseTreeModel'
 
 function lesson(id: string, overrides: Partial<LessonNode> = {}): LessonNode {
   return {
@@ -116,5 +116,26 @@ describe('nextFocusKey', () => {
 
   it('returns null when the current key is unknown', () => {
     expect(nextFocusKey(entries, 'nope', 'ArrowDown')).toBeNull()
+  })
+})
+
+describe('moveModule', () => {
+  const modules = [module('a', []), module('b', []), module('c', [])]
+
+  it('swaps a module with its neighbour and returns the full id list', () => {
+    expect(moveModule(modules, 'b', 'up')).toEqual(['b', 'a', 'c'])
+    expect(moveModule(modules, 'b', 'down')).toEqual(['a', 'c', 'b'])
+  })
+
+  it('returns null at the edges and for unknown ids', () => {
+    expect(moveModule(modules, 'a', 'up')).toBeNull()
+    expect(moveModule(modules, 'c', 'down')).toBeNull()
+    expect(moveModule(modules, 'zzz', 'up')).toBeNull()
+  })
+
+  it('does not mutate the input', () => {
+    const snapshot = modules.map((m) => m.moduleId)
+    moveModule(modules, 'b', 'up')
+    expect(modules.map((m) => m.moduleId)).toEqual(snapshot)
   })
 })

@@ -19,6 +19,8 @@ export const SQLSTATE_TO_CODE: Readonly<Record<string, AdminCoursesErrorCode>> =
   '22023': 'invalid_input',
   'P0002': 'not_found',
   'CR001': 'stale_target',
+  'CR002': 'module_not_empty',
+  'CR003': 'course_has_sales',
 };
 
 const CODES: ReadonlySet<string> = new Set(Object.values(SQLSTATE_TO_CODE));

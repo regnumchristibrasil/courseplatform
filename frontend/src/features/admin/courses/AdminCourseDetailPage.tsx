@@ -10,6 +10,7 @@ import { AdminCoursesApiError, SESSION_EXPIRED_MESSAGE } from './api'
 import { CourseForm } from './CourseForm'
 import { CourseDetailPanel } from './CourseDetailPanel'
 import { CourseTreeView } from './CourseTreeView'
+import { AddModuleAction, ModuleActions } from './ModuleActions'
 import { COURSE_SELECTION, resolveSelection, type TreeSelection } from './courseTreeModel'
 import { describeSaveError } from './saveErrors'
 import { useAdminCourse } from './useAdminCourse'
@@ -77,6 +78,7 @@ export function AdminCourseDetailPage() {
   const [editing, setEditing] = useState(false)
   const role = useCurrentAccess().data?.role
   const canEdit = role !== undefined && canPerformCourseAction(role, 'edit_details')
+  const canEditContent = role !== undefined && canPerformCourseAction(role, 'edit_content')
   const tree = query.data
   const resolved = tree ? resolveSelection(tree, selection) : null
   const editingCourse = editing && tree !== undefined && resolved?.kind === 'course'
@@ -98,9 +100,13 @@ export function AdminCourseDetailPage() {
           <CourseTreeView tree={tree} selection={selection} onSelect={setSelection} />
           {editingCourse ? (
             <CourseEditor tree={tree} onClose={() => setEditing(false)} />
-          ) : (
-            <CourseDetailPanel tree={tree} selection={resolveSelection(tree, selection)} onEdit={canEdit ? () => setEditing(true) : undefined} />
-          )}
+          ) : resolved ? (
+            <div className={styles.side}>
+              <CourseDetailPanel tree={tree} selection={resolved} onEdit={canEdit ? () => setEditing(true) : undefined} />
+              {canEditContent && resolved?.kind === 'course' ? <AddModuleAction courseId={tree.courseId} /> : null}
+              {canEditContent && resolved?.kind === 'module' ? <ModuleActions key={resolved.module.moduleId} tree={tree} module={resolved.module} /> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>

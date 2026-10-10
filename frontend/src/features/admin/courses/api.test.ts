@@ -1,6 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
-import { AdminCoursesApiError, getStaffCourse, listStaffCourses, mapCourseRow, mapCourseTree, parseErrorCode, saveCourse } from './api'
+import {
+  addModule,
+  AdminCoursesApiError,
+  deleteModule,
+  getStaffCourse,
+  listStaffCourses,
+  mapCourseRow,
+  mapCourseTree,
+  parseErrorCode,
+  renameModule,
+  reorderModules,
+  saveCourse,
+  setModuleArchived,
+} from './api'
 
 const ROW = {
   id: 'c1',
@@ -286,5 +299,60 @@ describe('saveCourse', () => {
   it('maps a transport failure to internal', async () => {
     const { client } = functionsClient({ data: null, error: { message: 'network down' } })
     await expect(saveCourse(client, { action: 'create', ...FIELDS })).rejects.toMatchObject({ code: 'internal' })
+  })
+})
+
+describe('parseErrorCode (module codes)', () => {
+  it('matches module_not_empty and course_has_sales exactly', () => {
+    expect(parseErrorCode({ message: 'module_not_empty' })).toBe('module_not_empty')
+    expect(parseErrorCode({ message: 'x', hint: 'course_has_sales' })).toBe('course_has_sales')
+    expect(parseErrorCode({ message: 'raise: course_has_sales' })).toBe('internal')
+  })
+})
+
+describe('module mutations', () => {
+  it('addModule calls app.staff_add_module', async () => {
+    const { client, schema, rpc } = rpcClient({ data: [{ id: 'm9', position: 3 }], error: null })
+    await expect(addModule(client, 'c1', 'Novo')).resolves.toBeUndefined()
+    expect(schema).toHaveBeenCalledWith('app')
+    expect(rpc).toHaveBeenCalledWith('staff_add_module', { p_course_id: 'c1', p_title: 'Novo' })
+  })
+
+  it('renameModule calls app.staff_rename_module', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await renameModule(client, 'm1', 'Outro')
+    expect(rpc).toHaveBeenCalledWith('staff_rename_module', { p_module_id: 'm1', p_title: 'Outro' })
+  })
+
+  it('reorderModules sends the full ordered id list', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await reorderModules(client, 'c1', ['m2', 'm1'])
+    expect(rpc).toHaveBeenCalledWith('staff_reorder_modules', { p_course_id: 'c1', p_module_ids: ['m2', 'm1'] })
+  })
+
+  it('setModuleArchived calls app.staff_set_module_archived', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await setModuleArchived(client, 'm1', true)
+    expect(rpc).toHaveBeenCalledWith('staff_set_module_archived', { p_module_id: 'm1', p_archived: true })
+  })
+
+  it('deleteModule calls app.staff_delete_module', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await deleteModule(client, 'm1')
+    expect(rpc).toHaveBeenCalledWith('staff_delete_module', { p_module_id: 'm1' })
+  })
+
+  it('throws typed errors with the stable code', async () => {
+    const stale = rpcClient({ data: null, error: { message: 'stale_target', code: 'CR001' } })
+    await expect(reorderModules(stale.client, 'c1', ['m1'])).rejects.toMatchObject({ code: 'stale_target' })
+    const sales = rpcClient({ data: null, error: { message: 'course_has_sales', code: 'CR003' } })
+    await expect(deleteModule(sales.client, 'm1')).rejects.toMatchObject({ code: 'course_has_sales' })
+    const notEmpty = rpcClient({ data: null, error: { message: 'module_not_empty', code: 'CR002' } })
+    await expect(deleteModule(notEmpty.client, 'm1')).rejects.toMatchObject({ code: 'module_not_empty' })
+  })
+
+  it('maps a 401 to unauthorized', async () => {
+    const { client } = rpcClient({ data: null, error: { message: 'JWT expired' }, status: 401 })
+    await expect(renameModule(client, 'm1', 'X')).rejects.toMatchObject({ code: 'unauthorized' })
   })
 })

@@ -115,3 +115,14 @@ export const countActive = (items: readonly { readonly archivedAt: string | null
 
 export const countActiveLessons = (modules: readonly ModuleNode[]): number =>
   modules.reduce((total, module) => total + countActive(module.lessons), 0)
+
+// Full ordered id list after moving one module a step (archived modules keep
+// their slot and take part in the swap, matching the server's dense positions).
+// null when the move is impossible (edge or unknown id).
+export function moveModule(modules: readonly ModuleNode[], moduleId: string, direction: 'up' | 'down'): readonly string[] | null {
+  const ids = [...modules].sort((a, b) => a.position - b.position).map((m) => m.moduleId)
+  const from = ids.indexOf(moduleId)
+  const to = direction === 'up' ? from - 1 : from + 1
+  if (from === -1 || to < 0 || to >= ids.length) return null
+  return ids.map((id, index) => (index === from ? ids[to]! : index === to ? ids[from]! : id))
+}
