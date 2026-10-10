@@ -91,4 +91,16 @@ describe('AdminCoursesPage', () => {
     await screen.findByText('Sua sessão expirou. Entre novamente.')
     expect(signOut).toHaveBeenCalledTimes(1)
   })
+
+  it('links to the new course form', async () => {
+    vi.mocked(listStaffCourses).mockResolvedValue([])
+    renderWithProviders(<AdminCoursesPage />)
+    expect(await screen.findByRole('link', { name: 'Novo curso' })).toHaveAttribute('href', '/admin/courses/new')
+  })
+
+  it('shows a draft without price', async () => {
+    vi.mocked(listStaffCourses).mockResolvedValue([course({ status: 'draft', priceCents: null })])
+    renderWithProviders(<AdminCoursesPage />)
+    expect(await screen.findByText('Sem preço')).toBeInTheDocument()
+  })
 })

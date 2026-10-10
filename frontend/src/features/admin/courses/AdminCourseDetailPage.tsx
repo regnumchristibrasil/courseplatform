@@ -3,11 +3,17 @@ import { Link, useParams } from 'react-router-dom'
 import { Alert } from '../../../components/ui/Alert'
 import { Button } from '../../../components/ui/Button'
 import { Spinner } from '../../../components/ui/Spinner'
+import type { CourseTree } from '../../../contracts/adminCourses'
+import { canPerformCourseAction } from '../../authz/coursePermissions'
+import { useCurrentAccess } from '../../authz/useCurrentAccess'
 import { AdminCoursesApiError, SESSION_EXPIRED_MESSAGE } from './api'
+import { CourseForm } from './CourseForm'
 import { CourseDetailPanel } from './CourseDetailPanel'
 import { CourseTreeView } from './CourseTreeView'
 import { COURSE_SELECTION, resolveSelection, type TreeSelection } from './courseTreeModel'
+import { describeSaveError } from './saveErrors'
 import { useAdminCourse } from './useAdminCourse'
+import { useSaveCourse } from './useSaveCourse'
 import styles from './AdminCourseDetailPage.module.css'
 
 function errorCode(error: unknown) {
@@ -29,11 +35,51 @@ function describeError(error: unknown): string {
 
 const RETRYABLE_CODES: readonly string[] = ['internal']
 
+function CourseEditor({ tree, onClose }: { readonly tree: CourseTree; readonly onClose: () => void }) {
+  const save = useSaveCourse()
+  const role = useCurrentAccess().data?.role
+  const canEditCommercial = role !== undefined && canPerformCourseAction(role, 'edit_price')
+
+  return (
+    <section aria-label="Editar curso" className={styles.editor}>
+      <h2>Editar detalhes</h2>
+      <CourseForm
+        // Remonta com os dados relidos após um conflito (stale_target).
+        key={tree.updatedAt}
+        initial={{
+          title: tree.title,
+          description: tree.description,
+          priceCents: tree.priceCents,
+          accessDurationDays: tree.accessDurationDays,
+        }}
+        canEditCommercial={canEditCommercial}
+        priceRequired={tree.status === 'published'}
+        pendingOrderCount={tree.pendingOrderCount}
+        isSaving={save.isPending}
+        errorMessage={save.isError ? describeSaveError(save.error) : null}
+        submitLabel="Salvar"
+        onCancel={onClose}
+        onSubmit={(fields) =>
+          save.mutate(
+            { action: 'update', courseId: tree.courseId, expectedUpdatedAt: tree.updatedAt, ...fields },
+            { onSuccess: onClose },
+          )
+        }
+      />
+    </section>
+  )
+}
+
 export function AdminCourseDetailPage() {
   const { courseId = '' } = useParams()
   const query = useAdminCourse(courseId)
   const [selection, setSelection] = useState<TreeSelection>(COURSE_SELECTION)
+  const [editing, setEditing] = useState(false)
+  const role = useCurrentAccess().data?.role
+  const canEdit = role !== undefined && canPerformCourseAction(role, 'edit_details')
   const tree = query.data
+  const resolved = tree ? resolveSelection(tree, selection) : null
+  const editingCourse = editing && tree !== undefined && resolved?.kind === 'course'
 
   return (
     <section className={`${styles.page} ph-no-capture`}>
@@ -50,7 +96,11 @@ export function AdminCourseDetailPage() {
       {tree ? (
         <div className={styles.workspace}>
           <CourseTreeView tree={tree} selection={selection} onSelect={setSelection} />
-          <CourseDetailPanel tree={tree} selection={resolveSelection(tree, selection)} />
+          {editingCourse ? (
+            <CourseEditor tree={tree} onClose={() => setEditing(false)} />
+          ) : (
+            <CourseDetailPanel tree={tree} selection={resolveSelection(tree, selection)} onEdit={canEdit ? () => setEditing(true) : undefined} />
+          )}
         </div>
       ) : null}
     </section>

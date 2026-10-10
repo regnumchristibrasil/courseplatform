@@ -1,18 +1,23 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type {
-  AdminCoursesErrorCode,
-  CourseListRow,
-  CourseStatus,
-  CourseTree,
-  LessonNode,
-  LessonVideo,
-  ModuleNode,
-  VideoProvider,
+import {
+  ADMIN_COURSES_ERROR_STATUS,
+  type AdminCoursesErrorCode,
+  type AdminCoursesRequest,
+  type CourseListRow,
+  type CourseStatus,
+  type CourseTree,
+  type LessonNode,
+  type LessonVideo,
+  type ModuleNode,
+  type SaveCourseResponse,
+  type VideoProvider,
 } from '../../../contracts/adminCourses'
 
 const APP_SCHEMA = 'app'
 const LIST_RPC = 'staff_list_courses'
 const GET_RPC = 'staff_get_course'
+const ADMIN_COURSES_FUNCTION = 'admin-courses'
+const KNOWN_CODES = Object.keys(ADMIN_COURSES_ERROR_STATUS) as readonly AdminCoursesErrorCode[]
 const INVALID_PAYLOAD = 'Invalid admin courses payload.'
 const HTTP_UNAUTHORIZED = 401
 const PG_INSUFFICIENT_PRIVILEGE = '42501'
@@ -32,20 +37,26 @@ export interface RpcErrorShape {
 
 export class AdminCoursesApiError extends Error {
   readonly code: AdminCoursesUiErrorCode
+  readonly requestId?: string
 
-  constructor(code: AdminCoursesUiErrorCode, message: string) {
+  constructor(code: AdminCoursesUiErrorCode, message: string, requestId?: string) {
     super(message)
     this.name = 'AdminCoursesApiError'
     this.code = code
+    this.requestId = requestId
   }
+}
+
+function isKnownCode(value: unknown): value is AdminCoursesErrorCode {
+  return typeof value === 'string' && (KNOWN_CODES as readonly string[]).includes(value)
 }
 
 // Erros de RPC carregam o código em hint ou message (igualdade exata, nunca
 // substring). 401 vem do gateway/PostgREST para sessão inválida.
 export function parseErrorCode(error: RpcErrorShape | null | undefined, status?: number): AdminCoursesUiErrorCode {
   if (status === HTTP_UNAUTHORIZED) return 'unauthorized'
-  if (error?.hint === 'forbidden' || error?.message === 'forbidden') return 'forbidden'
-  if (error?.hint === 'not_found' || error?.message === 'not_found') return 'not_found'
+  const exact = isKnownCode(error?.hint) ? error?.hint : isKnownCode(error?.message) ? error?.message : null
+  if (exact) return exact
   return error?.code === PG_INSUFFICIENT_PRIVILEGE ? 'forbidden' : 'internal'
 }
 
@@ -79,7 +90,7 @@ export function mapCourseRow(raw: unknown): CourseListRow {
   const { id, title, status, price_cents, access_duration_days, created_at, updated_at } = raw
   const durationOk = access_duration_days === null || Number.isInteger(access_duration_days)
   if (typeof id !== 'string' || id === '' || typeof title !== 'string' || !isCourseStatus(status) ||
-      !Number.isInteger(price_cents) || !durationOk ||
+      !(price_cents === null || Number.isInteger(price_cents)) || !durationOk ||
       typeof created_at !== 'string' || typeof updated_at !== 'string') {
     throw invalidPayload()
   }
@@ -87,7 +98,7 @@ export function mapCourseRow(raw: unknown): CourseListRow {
     courseId: id,
     title,
     status,
-    priceCents: price_cents as number,
+    priceCents: price_cents as number | null,
     accessDurationDays: access_duration_days as number | null,
     createdAt: created_at,
     updatedAt: updated_at,
@@ -161,4 +172,34 @@ export async function getStaffCourse(client: SupabaseClient, courseId: string): 
   const { data, error, status } = await client.schema(APP_SCHEMA).rpc(GET_RPC, { p_course_id: courseId })
   if (error) throw toApiError(error, status)
   return mapCourseTree(data)
+}
+
+function mapSaveResponse(data: unknown): SaveCourseResponse {
+  if (!isRecord(data) || !isNonEmptyString(data.courseId) || !isNonEmptyString(data.updatedAt)) throw invalidPayload()
+  return { courseId: data.courseId, updatedAt: data.updatedAt }
+}
+
+// Envelope da Edge Function: {error:{code,message,requestId}} no corpo HTTP.
+// Rejeição do gateway (JWT inválido) vem com HTTP 401 e sem .error.
+async function readEnvelope(error: { message?: string; context?: unknown }): Promise<AdminCoursesApiError> {
+  const fallback = new AdminCoursesApiError('internal', error.message ?? 'Admin courses request failed.')
+  if (!(error.context instanceof Response)) return fallback
+  if (error.context.status === HTTP_UNAUTHORIZED) return new AdminCoursesApiError('unauthorized', SESSION_EXPIRED_MESSAGE)
+  try {
+    const body: unknown = await error.context.json()
+    const env = isRecord(body) && isRecord(body.error) ? body.error : null
+    if (!env) return fallback
+    const code = isKnownCode(env.code) ? env.code : 'internal'
+    const message = typeof env.message === 'string' ? env.message : fallback.message
+    const requestId = typeof env.requestId === 'string' ? env.requestId : undefined
+    return new AdminCoursesApiError(code, message, requestId)
+  } catch {
+    return fallback
+  }
+}
+
+export async function saveCourse(client: SupabaseClient, request: AdminCoursesRequest): Promise<SaveCourseResponse> {
+  const { data, error } = await client.functions.invoke(ADMIN_COURSES_FUNCTION, { body: request })
+  if (error) throw await readEnvelope(error)
+  return mapSaveResponse(data)
 }

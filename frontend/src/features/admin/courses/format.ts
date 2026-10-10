@@ -8,7 +8,8 @@ export const STATUS_LABELS: Readonly<Record<CourseStatus, string>> = {
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function formatPrice(priceCents: number): string {
+export function formatPrice(priceCents: number | null): string {
+  if (priceCents === null) return 'Sem preço'
   return BRL.format(priceCents / 100).replace(/ /g, ' ')
 }
 

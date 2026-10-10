@@ -44,7 +44,7 @@ export interface CourseListRow {
   readonly courseId: string;
   readonly title: string;
   readonly status: CourseStatus;
-  readonly priceCents: number;
+  readonly priceCents: number | null; // null only while draft
   readonly accessDurationDays: number | null; // null = lifetime access
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -84,7 +84,52 @@ export interface CourseTree extends CourseListRow {
   readonly modules: readonly ModuleNode[]; // ordered by position, archived included
 }
 
-export type AdminCoursesErrorCode = 'forbidden' | 'not_found';
+export type AdminCoursesErrorCode = 'forbidden' | 'not_found' | 'invalid_input' | 'stale_target';
+
+// Field limits mirrored by app_private.assert_valid_course_fields and the
+// courses_price_range CHECK. Change SQL and this file together.
+export const MAX_COURSE_TITLE_LENGTH = 200;
+export const MAX_COURSE_DESCRIPTION_LENGTH = 5000;
+export const MIN_PRICE_CENTS = 1;
+export const MAX_PRICE_CENTS = 10_000_000; // R$ 100.000,00
+export const MIN_ACCESS_DURATION_DAYS = 1;
+export const MAX_ACCESS_DURATION_DAYS = 36_500;
+
+// HTTP status used by the admin-courses Edge Function. Clients decide by the
+// stable code, never by the status (direct RPC calls map statuses differently).
+export const ADMIN_COURSES_ERROR_STATUS: Readonly<Record<AdminCoursesErrorCode, number>> = {
+  forbidden: 403,
+  not_found: 404,
+  invalid_input: 400,
+  stale_target: 409,
+};
+
+// Editable course fields. The editor always sends the full state; a tutor
+// must resend the current price/duration unchanged (null stays null).
+export interface CourseFieldsInput {
+  readonly title: string;
+  readonly description: string | null;
+  readonly priceCents: number | null;
+  readonly accessDurationDays: number | null; // null = lifetime access
+}
+
+export interface CreateCourseRequest extends CourseFieldsInput {
+  readonly action: 'create';
+}
+
+export interface UpdateCourseRequest extends CourseFieldsInput {
+  readonly action: 'update';
+  readonly courseId: string;
+  // updated_at exactly as read (microsecond string); never round-trip via Date.
+  readonly expectedUpdatedAt: string;
+}
+
+export type AdminCoursesRequest = CreateCourseRequest | UpdateCourseRequest;
+
+export interface SaveCourseResponse {
+  readonly courseId: string;
+  readonly updatedAt: string;
+}
 
 const COMMERCIAL_ACTIONS: readonly CourseAction[] = ['edit_price', 'edit_access_duration'];
 

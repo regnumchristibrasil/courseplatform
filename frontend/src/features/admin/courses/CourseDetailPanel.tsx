@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import type { CourseTree, LessonNode, ModuleNode } from '../../../contracts/adminCourses'
 import { CourseStatusBadge } from './CourseStatusBadge'
@@ -10,6 +11,7 @@ import styles from './CourseDetailPanel.module.css'
 export interface CourseDetailPanelProps {
   readonly tree: CourseTree
   readonly selection: ResolvedSelection
+  readonly onEdit?: () => void // present only when the actor may edit course details
 }
 
 function Fields({ children }: { readonly children: ReactNode }) {
@@ -25,10 +27,11 @@ function Field({ label, children }: { readonly label: string; readonly children:
   )
 }
 
-function CourseDetails({ tree }: { readonly tree: CourseTree }) {
+function CourseDetails({ tree, onEdit }: { readonly tree: CourseTree; readonly onEdit?: () => void }) {
   return (
     <>
       <h2>{tree.title}</h2>
+      {onEdit ? <Button variant="secondary" onClick={onEdit}>Editar detalhes</Button> : null}
       <Fields>
         <Field label="Status"><CourseStatusBadge status={tree.status} /></Field>
         <Field label="Descrição">{tree.description ?? 'Sem descrição'}</Field>
@@ -89,10 +92,10 @@ function LessonDetails({ lesson, module }: { readonly lesson: LessonNode; readon
 }
 
 // Read-only detail of the selected tree item. Editing arrives in later tickets.
-export function CourseDetailPanel({ tree, selection }: CourseDetailPanelProps) {
+export function CourseDetailPanel({ tree, selection, onEdit }: CourseDetailPanelProps) {
   return (
     <section aria-label="Detalhes do item selecionado" className={styles.panel}>
-      {selection.kind === 'course' ? <CourseDetails tree={tree} /> : null}
+      {selection.kind === 'course' ? <CourseDetails tree={tree} onEdit={onEdit} /> : null}
       {selection.kind === 'module' ? <ModuleDetails module={selection.module} /> : null}
       {selection.kind === 'lesson' ? <LessonDetails lesson={selection.lesson} module={selection.module} /> : null}
     </section>

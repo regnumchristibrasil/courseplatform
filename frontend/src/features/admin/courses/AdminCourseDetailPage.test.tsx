@@ -4,11 +4,13 @@ import { Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CourseTree } from '../../../contracts/adminCourses'
 import { renderWithProviders } from '../../../test/renderWithProviders'
-import { AdminCoursesApiError, getStaffCourse } from './api'
+import { useCurrentAccess } from '../../authz/useCurrentAccess'
+import { AdminCoursesApiError, getStaffCourse, saveCourse } from './api'
 import AdminCourseDetailPage from './AdminCourseDetailPage'
 
 vi.mock('../../../lib/supabaseClient', () => ({ supabase: { __fake: true } }))
-vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), getStaffCourse: vi.fn() }))
+vi.mock('../../authz/useCurrentAccess', () => ({ useCurrentAccess: vi.fn() }))
+vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), getStaffCourse: vi.fn(), saveCourse: vi.fn() }))
 
 const TREE: CourseTree = {
   courseId: 'c1',
@@ -43,8 +45,13 @@ function renderPage() {
   )
 }
 
+function asRole(role: 'admin' | 'tutor' | 'student') {
+  vi.mocked(useCurrentAccess).mockReturnValue({ data: { role, isActive: true } } as ReturnType<typeof useCurrentAccess>)
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
+  asRole('admin')
 })
 
 describe('AdminCourseDetailPage', () => {
@@ -150,5 +157,82 @@ describe('AdminCourseDetailPage', () => {
 
     await screen.findByText('Sua sessão expirou. Entre novamente.')
     expect(signOut).toHaveBeenCalledTimes(1)
+  })
+
+  describe('editing course details', () => {
+    it('admin edits title, price and duration; saves with the updatedAt read and re-reads', async () => {
+      vi.mocked(getStaffCourse).mockResolvedValue(TREE)
+      vi.mocked(saveCourse).mockResolvedValue({ courseId: 'c1', updatedAt: 'new' })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: 'Editar detalhes' }))
+      await user.clear(screen.getByLabelText('Título'))
+      await user.type(screen.getByLabelText('Título'), 'Curso B')
+      await user.clear(screen.getByLabelText('Preço (R$)'))
+      await user.type(screen.getByLabelText('Preço (R$)'), '250')
+      await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+      expect(saveCourse).toHaveBeenCalledWith({ __fake: true }, {
+        action: 'update',
+        courseId: 'c1',
+        expectedUpdatedAt: TREE.updatedAt,
+        title: 'Curso B',
+        description: 'Descricao do curso',
+        priceCents: 25000,
+        accessDurationDays: null,
+      })
+      expect(await screen.findByRole('button', { name: 'Editar detalhes' })).toBeInTheDocument()
+      expect(getStaffCourse).toHaveBeenCalledTimes(2)
+    })
+
+    it('tutor sees price and duration read-only', async () => {
+      asRole('tutor')
+      vi.mocked(getStaffCourse).mockResolvedValue(TREE)
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: 'Editar detalhes' }))
+
+      expect(screen.getByLabelText('Preço (R$)')).toHaveAttribute('readonly')
+      expect(screen.getByLabelText('Duração do acesso (dias)')).toHaveAttribute('readonly')
+    })
+
+    it('hides the edit button from non-staff roles', async () => {
+      asRole('student')
+      vi.mocked(getStaffCourse).mockResolvedValue(TREE)
+      renderPage()
+
+      await screen.findByRole('tree')
+      expect(screen.queryByRole('button', { name: 'Editar detalhes' })).not.toBeInTheDocument()
+    })
+
+    it('on a stale edit shows the conflict message and re-reads the course into the form', async () => {
+      const refreshed = { ...TREE, title: 'Titulo de outra pessoa', updatedAt: '2026-01-03T10:00:00Z' }
+      vi.mocked(getStaffCourse).mockResolvedValueOnce(TREE).mockResolvedValue(refreshed)
+      vi.mocked(saveCourse).mockRejectedValue(new AdminCoursesApiError('stale_target', 'stale_target'))
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: 'Editar detalhes' }))
+      await user.type(screen.getByLabelText('Título'), ' editado')
+      await user.click(screen.getByRole('button', { name: 'Salvar' }))
+
+      expect(await screen.findByText(/foi alterado por outra pessoa/)).toBeInTheDocument()
+      expect(await screen.findByLabelText('Título')).toHaveValue('Titulo de outra pessoa')
+      expect(getStaffCourse).toHaveBeenCalledTimes(2)
+    })
+
+    it('cancel leaves edit mode without saving', async () => {
+      vi.mocked(getStaffCourse).mockResolvedValue(TREE)
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: 'Editar detalhes' }))
+      await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(saveCourse).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: 'Editar detalhes' })).toBeInTheDocument()
+    })
   })
 })

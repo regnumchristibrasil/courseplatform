@@ -42,6 +42,7 @@ export function AdminCoursesPage() {
   return (
     <section className={`${styles.page} ph-no-capture`}>
       <h1>Cursos</h1>
+      <Link to="/admin/courses/new">Novo curso</Link>
       {query.isError ? (
         <Alert variant="error">
           <p>{describeError(query.error)}</p>

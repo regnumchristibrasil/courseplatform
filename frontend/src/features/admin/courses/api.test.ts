@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
-import { AdminCoursesApiError, getStaffCourse, listStaffCourses, mapCourseRow, mapCourseTree, parseErrorCode } from './api'
+import { AdminCoursesApiError, getStaffCourse, listStaffCourses, mapCourseRow, mapCourseTree, parseErrorCode, saveCourse } from './api'
 
 const ROW = {
   id: 'c1',
@@ -233,5 +233,58 @@ describe('getStaffCourse', () => {
   it('maps a 401 to unauthorized', async () => {
     const { client } = rpcClient({ data: null, error: { code: '42501', message: 'x' }, status: 401 })
     await expect(getStaffCourse(client, 'c1')).rejects.toMatchObject({ code: 'unauthorized' })
+  })
+})
+
+describe('parseErrorCode (write codes)', () => {
+  it('matches invalid_input and stale_target exactly', () => {
+    expect(parseErrorCode({ message: 'stale_target' })).toBe('stale_target')
+    expect(parseErrorCode({ message: 'x', hint: 'invalid_input' })).toBe('invalid_input')
+    expect(parseErrorCode({ message: 'raise: stale_target' })).toBe('internal')
+  })
+})
+
+describe('mapCourseRow (draft without price)', () => {
+  it('accepts a null price', () => {
+    expect(mapCourseRow({ ...ROW, status: 'draft', price_cents: null }).priceCents).toBeNull()
+  })
+})
+
+const FIELDS = { title: 'Curso', description: null, priceCents: 9900, accessDurationDays: null }
+
+function functionsClient(result: { data: unknown; error: unknown }) {
+  const invoke = vi.fn().mockResolvedValue(result)
+  return { client: { functions: { invoke } } as unknown as SupabaseClient, invoke }
+}
+
+describe('saveCourse', () => {
+  it('invokes admin-courses with the request and maps the response', async () => {
+    const { client, invoke } = functionsClient({ data: { courseId: 'c1', updatedAt: '2026-10-09T22:35:59.123456+00:00' }, error: null })
+    const request = { action: 'update', courseId: 'c1', expectedUpdatedAt: '2026-01-02T00:00:00.000001+00:00', ...FIELDS } as const
+    await expect(saveCourse(client, request)).resolves.toEqual({ courseId: 'c1', updatedAt: '2026-10-09T22:35:59.123456+00:00' })
+    expect(invoke).toHaveBeenCalledWith('admin-courses', { body: request })
+  })
+
+  it('rejects a malformed response', async () => {
+    const { client } = functionsClient({ data: { courseId: 'c1' }, error: null })
+    await expect(saveCourse(client, { action: 'create', ...FIELDS })).rejects.toThrow('Invalid admin courses payload.')
+  })
+
+  it('reads the error envelope into a typed error', async () => {
+    const context = new Response(JSON.stringify({ error: { code: 'stale_target', message: 'm', requestId: 'r1' } }), { status: 409 })
+    const { client } = functionsClient({ data: null, error: { message: 'non-2xx', context } })
+    await expect(saveCourse(client, { action: 'create', ...FIELDS })).rejects.toMatchObject({ code: 'stale_target', requestId: 'r1' })
+  })
+
+  it('maps a gateway 401 to unauthorized and unknown envelopes to internal', async () => {
+    const gateway = functionsClient({ data: null, error: { message: 'x', context: new Response('{}', { status: 401 }) } })
+    await expect(saveCourse(gateway.client, { action: 'create', ...FIELDS })).rejects.toMatchObject({ code: 'unauthorized' })
+    const unknown = functionsClient({ data: null, error: { message: 'x', context: new Response(JSON.stringify({ error: { code: 'weird' } }), { status: 500 }) } })
+    await expect(saveCourse(unknown.client, { action: 'create', ...FIELDS })).rejects.toMatchObject({ code: 'internal' })
+  })
+
+  it('maps a transport failure to internal', async () => {
+    const { client } = functionsClient({ data: null, error: { message: 'network down' } })
+    await expect(saveCourse(client, { action: 'create', ...FIELDS })).rejects.toMatchObject({ code: 'internal' })
   })
 })
