@@ -10,6 +10,7 @@ import { AdminCoursesApiError, SESSION_EXPIRED_MESSAGE } from './api'
 import { CourseForm } from './CourseForm'
 import { CourseDetailPanel } from './CourseDetailPanel'
 import { CourseTreeView } from './CourseTreeView'
+import { AddLessonAction, LessonActions } from './LessonActions'
 import { AddModuleAction, ModuleActions } from './ModuleActions'
 import { COURSE_SELECTION, resolveSelection, type TreeSelection } from './courseTreeModel'
 import { describeSaveError } from './saveErrors'
@@ -104,7 +105,15 @@ export function AdminCourseDetailPage() {
             <div className={styles.side}>
               <CourseDetailPanel tree={tree} selection={resolved} onEdit={canEdit ? () => setEditing(true) : undefined} />
               {canEditContent && resolved?.kind === 'course' ? <AddModuleAction courseId={tree.courseId} /> : null}
-              {canEditContent && resolved?.kind === 'module' ? <ModuleActions key={resolved.module.moduleId} tree={tree} module={resolved.module} /> : null}
+              {canEditContent && resolved?.kind === 'module' ? (
+                <>
+                  <ModuleActions key={resolved.module.moduleId} tree={tree} module={resolved.module} />
+                  <AddLessonAction key={`add-${resolved.module.moduleId}`} module={resolved.module} courseStatus={tree.status} />
+                </>
+              ) : null}
+              {canEditContent && resolved?.kind === 'lesson' ? (
+                <LessonActions key={resolved.lesson.lessonId} tree={tree} module={resolved.module} lesson={resolved.lesson} />
+              ) : null}
             </div>
           ) : null}
         </div>

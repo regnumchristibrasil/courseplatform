@@ -30,7 +30,7 @@ const TREE: CourseTree = {
       position: 1,
       archivedAt: null,
       lessons: [
-        { lessonId: 'l1', title: 'Aula 1', position: 1, durationSeconds: 600, isFreePreview: false, archivedAt: null, video: { provider: 'youtube', externalRef: 'dQw4w9WgXcQ' } },
+        { lessonId: 'l1', title: 'Aula 1', position: 1, durationSeconds: 600, isFreePreview: false, archivedAt: null, updatedAt: '2026-01-03T10:00:00Z', video: { provider: 'youtube', externalRef: 'dQw4w9WgXcQ' } },
       ],
     },
   ],

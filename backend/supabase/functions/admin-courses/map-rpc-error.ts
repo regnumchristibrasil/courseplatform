@@ -21,6 +21,7 @@ export const SQLSTATE_TO_CODE: Readonly<Record<string, AdminCoursesErrorCode>> =
   'CR001': 'stale_target',
   'CR002': 'module_not_empty',
   'CR003': 'course_has_sales',
+  'CR004': 'publish_gate_violated',
 };
 
 const CODES: ReadonlySet<string> = new Set(Object.values(SQLSTATE_TO_CODE));

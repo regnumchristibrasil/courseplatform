@@ -4,9 +4,9 @@ import type { CourseTree, LessonNode, ModuleNode } from '../../../contracts/admi
 import { CourseDetailPanel } from './CourseDetailPanel'
 import { resolveSelection, type TreeSelection } from './courseTreeModel'
 
-const LESSON_YT: LessonNode = { lessonId: 'l1', title: 'Aula 1', position: 1, durationSeconds: 600, isFreePreview: true, archivedAt: null, video: { provider: 'youtube', externalRef: 'dQw4w9WgXcQ' } }
-const LESSON_PANDA: LessonNode = { lessonId: 'l2', title: 'Aula 2', position: 2, durationSeconds: null, isFreePreview: false, archivedAt: '2026-02-01T00:00:00Z', video: { provider: 'panda', externalRef: '3f1c9a52-0000-4000-8000-000000000001' } }
-const LESSON_NONE: LessonNode = { lessonId: 'l3', title: 'Aula 3', position: 3, durationSeconds: null, isFreePreview: false, archivedAt: null, video: null }
+const LESSON_YT: LessonNode = { lessonId: 'l1', title: 'Aula 1', position: 1, durationSeconds: 600, isFreePreview: true, archivedAt: null, updatedAt: '2026-01-03T10:00:00Z', video: { provider: 'youtube', externalRef: 'dQw4w9WgXcQ' } }
+const LESSON_PANDA: LessonNode = { lessonId: 'l2', title: 'Aula 2', position: 2, durationSeconds: null, isFreePreview: false, archivedAt: '2026-02-01T00:00:00Z', updatedAt: '2026-01-03T10:00:00Z', video: { provider: 'panda', externalRef: '3f1c9a52-0000-4000-8000-000000000001' } }
+const LESSON_NONE: LessonNode = { lessonId: 'l3', title: 'Aula 3', position: 3, durationSeconds: null, isFreePreview: false, archivedAt: null, updatedAt: '2026-01-03T10:00:00Z', video: null }
 const MODULE: ModuleNode = { moduleId: 'm1', title: 'Modulo 1', position: 1, archivedAt: null, lessons: [LESSON_YT, LESSON_PANDA, LESSON_NONE] }
 const MODULE_EMPTY: ModuleNode = { moduleId: 'm2', title: 'Modulo 2', position: 2, archivedAt: '2026-02-01T00:00:00Z', lessons: [] }
 

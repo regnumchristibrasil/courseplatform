@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CourseTree, LessonNode, ModuleNode } from '../../../contracts/adminCourses'
-import { COURSE_ENTRY_KEY, entryKey, flattenTree, moveModule, nextFocusKey, resolveSelection } from './courseTreeModel'
+import { COURSE_ENTRY_KEY, entryKey, flattenTree, moveLesson, moveModule, nextFocusKey, otherModulesOfCourse, resolveSelection } from './courseTreeModel'
 
 function lesson(id: string, overrides: Partial<LessonNode> = {}): LessonNode {
   return {
@@ -10,6 +10,7 @@ function lesson(id: string, overrides: Partial<LessonNode> = {}): LessonNode {
     durationSeconds: null,
     isFreePreview: false,
     archivedAt: null,
+    updatedAt: '2026-01-01T00:00:00Z',
     video: { provider: 'youtube', externalRef: 'abc' },
     ...overrides,
   }
@@ -137,5 +138,33 @@ describe('moveModule', () => {
     const snapshot = modules.map((m) => m.moduleId)
     moveModule(modules, 'b', 'up')
     expect(modules.map((m) => m.moduleId)).toEqual(snapshot)
+  })
+})
+
+describe('moveLesson', () => {
+  const mod = module('m', [lesson('a', { position: 1 }), lesson('b', { position: 2, archivedAt: '2026-02-01T00:00:00Z' }), lesson('c', { position: 3 })])
+
+  it('swaps a lesson with its neighbour (archived ones included) and returns the full id list', () => {
+    expect(moveLesson(mod, 'b', 'up')).toEqual(['b', 'a', 'c'])
+    expect(moveLesson(mod, 'b', 'down')).toEqual(['a', 'c', 'b'])
+  })
+
+  it('orders by position, not by array order', () => {
+    const shuffled = module('m', [lesson('c', { position: 3 }), lesson('a', { position: 1 }), lesson('b', { position: 2 })])
+    expect(moveLesson(shuffled, 'a', 'down')).toEqual(['b', 'a', 'c'])
+  })
+
+  it('returns null at the edges and for unknown ids', () => {
+    expect(moveLesson(mod, 'a', 'up')).toBeNull()
+    expect(moveLesson(mod, 'c', 'down')).toBeNull()
+    expect(moveLesson(mod, 'zzz', 'up')).toBeNull()
+  })
+})
+
+describe('otherModulesOfCourse', () => {
+  const modules = [module('a', [], { position: 2 }), module('b', [], { position: 1 }), module('c', [], { position: 3, archivedAt: '2026-02-01T00:00:00Z' })]
+
+  it('lists the modules other than the current one, by position, archived included', () => {
+    expect(otherModulesOfCourse(modules, 'a').map((m) => m.moduleId)).toEqual(['b', 'c'])
   })
 })

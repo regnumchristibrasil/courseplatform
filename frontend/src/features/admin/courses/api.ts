@@ -6,6 +6,7 @@ import {
   type CourseListRow,
   type CourseStatus,
   type CourseTree,
+  type LessonFieldsInput,
   type LessonNode,
   type LessonVideo,
   type ModuleNode,
@@ -134,10 +135,10 @@ function mapVideo(raw: unknown): LessonVideo | null {
 
 function mapLesson(raw: unknown): LessonNode {
   if (!isRecord(raw)) throw invalidPayload()
-  const { id, title, position, duration_seconds, is_free_preview, archived_at, video } = raw
+  const { id, title, position, duration_seconds, is_free_preview, archived_at, updated_at, video } = raw
   if (!isNonEmptyString(id) || typeof title !== 'string' || !Number.isInteger(position) ||
       !(duration_seconds === null || Number.isInteger(duration_seconds)) ||
-      typeof is_free_preview !== 'boolean' || !isNullableString(archived_at)) {
+      typeof is_free_preview !== 'boolean' || !isNullableString(archived_at) || !isNonEmptyString(updated_at)) {
     throw invalidPayload()
   }
   return {
@@ -147,6 +148,7 @@ function mapLesson(raw: unknown): LessonNode {
     durationSeconds: duration_seconds as number | null,
     isFreePreview: is_free_preview,
     archivedAt: archived_at,
+    updatedAt: updated_at,
     video: mapVideo(video),
   }
 }
@@ -206,23 +208,65 @@ export async function saveCourse(client: SupabaseClient, request: AdminCoursesRe
 
 // Gestão de módulos: RPCs chamadas direto pelo PostgREST com o JWT do usuário
 // (ADR 0002, decisão 3). O banco aplica papel, vendas e conflito de lista.
-async function callModuleRpc(client: SupabaseClient, fn: string, args: Record<string, unknown>): Promise<void> {
+async function callStaffRpc(client: SupabaseClient, fn: string, args: Record<string, unknown>): Promise<void> {
   const { error, status } = await client.schema(APP_SCHEMA).rpc(fn, args)
   if (error) throw toApiError(error, status)
 }
 
 export const addModule = (client: SupabaseClient, courseId: string, title: string) =>
-  callModuleRpc(client, 'staff_add_module', { p_course_id: courseId, p_title: title })
+  callStaffRpc(client, 'staff_add_module', { p_course_id: courseId, p_title: title })
 
 export const renameModule = (client: SupabaseClient, moduleId: string, title: string) =>
-  callModuleRpc(client, 'staff_rename_module', { p_module_id: moduleId, p_title: title })
+  callStaffRpc(client, 'staff_rename_module', { p_module_id: moduleId, p_title: title })
 
 // Lista completa e ordenada (arquivados inclusos); lista desatualizada -> stale_target.
 export const reorderModules = (client: SupabaseClient, courseId: string, moduleIds: readonly string[]) =>
-  callModuleRpc(client, 'staff_reorder_modules', { p_course_id: courseId, p_module_ids: moduleIds })
+  callStaffRpc(client, 'staff_reorder_modules', { p_course_id: courseId, p_module_ids: moduleIds })
 
 export const setModuleArchived = (client: SupabaseClient, moduleId: string, archived: boolean) =>
-  callModuleRpc(client, 'staff_set_module_archived', { p_module_id: moduleId, p_archived: archived })
+  callStaffRpc(client, 'staff_set_module_archived', { p_module_id: moduleId, p_archived: archived })
 
 export const deleteModule = (client: SupabaseClient, moduleId: string) =>
-  callModuleRpc(client, 'staff_delete_module', { p_module_id: moduleId })
+  callStaffRpc(client, 'staff_delete_module', { p_module_id: moduleId })
+
+// Gestão de aulas. As operações sobre UMA aula levam o updated_at lido (string
+// exata, nunca via Date) como token de locking otimista; divergência -> stale_target.
+export const addLesson = (client: SupabaseClient, moduleId: string, fields: LessonFieldsInput, archived: boolean) =>
+  callStaffRpc(client, 'staff_add_lesson', {
+    p_module_id: moduleId,
+    p_title: fields.title,
+    p_duration_seconds: fields.durationSeconds,
+    p_is_free_preview: fields.isFreePreview,
+    p_archived: archived,
+  })
+
+export const updateLesson = (client: SupabaseClient, lessonId: string, expectedUpdatedAt: string, fields: LessonFieldsInput) =>
+  callStaffRpc(client, 'staff_update_lesson', {
+    p_lesson_id: lessonId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_title: fields.title,
+    p_duration_seconds: fields.durationSeconds,
+    p_is_free_preview: fields.isFreePreview,
+  })
+
+// Lista completa do módulo (arquivadas inclusas); lista desatualizada -> stale_target.
+export const reorderLessons = (client: SupabaseClient, moduleId: string, lessonIds: readonly string[]) =>
+  callStaffRpc(client, 'staff_reorder_lessons', { p_module_id: moduleId, p_lesson_ids: lessonIds })
+
+// Vai para o fim do módulo de destino; só módulos do mesmo curso.
+export const moveLesson = (client: SupabaseClient, lessonId: string, expectedUpdatedAt: string, targetModuleId: string) =>
+  callStaffRpc(client, 'staff_move_lesson', {
+    p_lesson_id: lessonId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_target_module_id: targetModuleId,
+  })
+
+export const setLessonArchived = (client: SupabaseClient, lessonId: string, expectedUpdatedAt: string, archived: boolean) =>
+  callStaffRpc(client, 'staff_set_lesson_archived', {
+    p_lesson_id: lessonId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_archived: archived,
+  })
+
+export const deleteLesson = (client: SupabaseClient, lessonId: string, expectedUpdatedAt: string) =>
+  callStaffRpc(client, 'staff_delete_lesson', { p_lesson_id: lessonId, p_expected_updated_at: expectedUpdatedAt })

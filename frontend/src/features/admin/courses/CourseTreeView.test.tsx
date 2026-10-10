@@ -23,8 +23,8 @@ const TREE: CourseTree = {
       position: 1,
       archivedAt: null,
       lessons: [
-        { lessonId: 'l1', title: 'Aula 1', position: 1, durationSeconds: null, isFreePreview: false, archivedAt: null, video: { provider: 'youtube', externalRef: 'x' } },
-        { lessonId: 'l2', title: 'Aula 2', position: 2, durationSeconds: null, isFreePreview: false, archivedAt: '2026-02-01T00:00:00Z', video: null },
+        { lessonId: 'l1', title: 'Aula 1', position: 1, durationSeconds: null, isFreePreview: false, archivedAt: null, updatedAt: '2026-01-03T10:00:00Z', video: { provider: 'youtube', externalRef: 'x' } },
+        { lessonId: 'l2', title: 'Aula 2', position: 2, durationSeconds: null, isFreePreview: false, archivedAt: '2026-02-01T00:00:00Z', updatedAt: '2026-01-03T10:00:00Z', video: null },
       ],
     },
     { moduleId: 'm2', title: 'Modulo 2', position: 2, archivedAt: '2026-02-01T00:00:00Z', lessons: [] },

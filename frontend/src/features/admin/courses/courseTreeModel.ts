@@ -126,3 +126,19 @@ export function moveModule(modules: readonly ModuleNode[], moduleId: string, dir
   if (from === -1 || to < 0 || to >= ids.length) return null
   return ids.map((id, index) => (index === from ? ids[to]! : index === to ? ids[from]! : id))
 }
+
+// Full ordered id list of a module's lessons after moving one a step (archived
+// ones keep their slot and take part in the swap, like the server's dense
+// positions). null when the move is impossible (edge or unknown id).
+export function moveLesson(module: ModuleNode, lessonId: string, direction: 'up' | 'down'): readonly string[] | null {
+  const ids = [...module.lessons].sort((a, b) => a.position - b.position).map((l) => l.lessonId)
+  const from = ids.indexOf(lessonId)
+  const to = direction === 'up' ? from - 1 : from + 1
+  if (from === -1 || to < 0 || to >= ids.length) return null
+  return ids.map((id, index) => (index === from ? ids[to]! : index === to ? ids[from]! : id))
+}
+
+// Valid targets for moving a lesson: every other module of the same course
+// (archived included, by position). Cross-course moves are impossible by construction.
+export const otherModulesOfCourse = (modules: readonly ModuleNode[], currentModuleId: string): readonly ModuleNode[] =>
+  [...modules].filter((m) => m.moduleId !== currentModuleId).sort((a, b) => a.position - b.position)

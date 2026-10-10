@@ -1,18 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  addLesson,
   addModule,
   AdminCoursesApiError,
+  deleteLesson,
   deleteModule,
   getStaffCourse,
   listStaffCourses,
   mapCourseRow,
   mapCourseTree,
+  moveLesson,
   parseErrorCode,
   renameModule,
+  reorderLessons,
   reorderModules,
   saveCourse,
+  setLessonArchived,
   setModuleArchived,
+  updateLesson,
 } from './api'
 
 const ROW = {
@@ -153,6 +159,7 @@ const TREE_ROW = {
           duration_seconds: 600,
           is_free_preview: true,
           archived_at: null,
+          updated_at: '2026-01-03T10:00:00.123456+00:00',
           video: { provider: 'youtube', external_ref: 'dQw4w9WgXcQ' },
         },
         {
@@ -162,6 +169,7 @@ const TREE_ROW = {
           duration_seconds: null,
           is_free_preview: false,
           archived_at: '2026-02-01T00:00:00Z',
+          updated_at: '2026-01-04T10:00:00.5+00:00',
           video: null,
         },
       ],
@@ -183,6 +191,7 @@ describe('mapCourseTree', () => {
       durationSeconds: 600,
       isFreePreview: true,
       archivedAt: null,
+      updatedAt: '2026-01-03T10:00:00.123456+00:00',
       video: { provider: 'youtube', externalRef: 'dQw4w9WgXcQ' },
     })
     expect(tree.modules[0]?.lessons[1]).toMatchObject({ archivedAt: '2026-02-01T00:00:00Z', video: null, durationSeconds: null })
@@ -212,6 +221,8 @@ describe('mapCourseTree', () => {
     withLesson({ is_free_preview: 'yes' }),
     withLesson({ duration_seconds: 'x' }),
     withLesson({ archived_at: 7 }),
+    withLesson({ updated_at: undefined }),
+    withLesson({ updated_at: 5 }),
     withLesson({ video: { provider: 'vimeo', external_ref: 'x' } }),
     withLesson({ video: { provider: 'panda', external_ref: '' } }),
     withLesson({ video: 'x' }),
@@ -354,5 +365,80 @@ describe('module mutations', () => {
   it('maps a 401 to unauthorized', async () => {
     const { client } = rpcClient({ data: null, error: { message: 'JWT expired' }, status: 401 })
     await expect(renameModule(client, 'm1', 'X')).rejects.toMatchObject({ code: 'unauthorized' })
+  })
+})
+
+describe('parseErrorCode (publish gate)', () => {
+  it('matches publish_gate_violated exactly', () => {
+    expect(parseErrorCode({ message: 'publish_gate_violated' })).toBe('publish_gate_violated')
+    expect(parseErrorCode({ message: 'x', hint: 'publish_gate_violated' })).toBe('publish_gate_violated')
+  })
+})
+
+describe('lesson mutations', () => {
+  const FIELDS = { title: 'Aula', durationSeconds: 90, isFreePreview: true }
+  const TOKEN = '2026-01-03T10:00:00.123456+00:00'
+
+  it('addLesson calls app.staff_add_lesson', async () => {
+    const { client, schema, rpc } = rpcClient({ data: [{ id: 'l9', position: 3, updated_at: TOKEN }], error: null })
+    await expect(addLesson(client, 'm1', FIELDS, false)).resolves.toBeUndefined()
+    expect(schema).toHaveBeenCalledWith('app')
+    expect(rpc).toHaveBeenCalledWith('staff_add_lesson', {
+      p_module_id: 'm1',
+      p_title: 'Aula',
+      p_duration_seconds: 90,
+      p_is_free_preview: true,
+      p_archived: false,
+    })
+  })
+
+  it('updateLesson sends the updated_at token as read, untouched', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await updateLesson(client, 'l1', TOKEN, { ...FIELDS, durationSeconds: null })
+    expect(rpc).toHaveBeenCalledWith('staff_update_lesson', {
+      p_lesson_id: 'l1',
+      p_expected_updated_at: TOKEN,
+      p_title: 'Aula',
+      p_duration_seconds: null,
+      p_is_free_preview: true,
+    })
+  })
+
+  it('reorderLessons sends the full ordered id list of the module', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await reorderLessons(client, 'm1', ['l2', 'l1'])
+    expect(rpc).toHaveBeenCalledWith('staff_reorder_lessons', { p_module_id: 'm1', p_lesson_ids: ['l2', 'l1'] })
+  })
+
+  it('moveLesson calls app.staff_move_lesson', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await moveLesson(client, 'l1', TOKEN, 'm2')
+    expect(rpc).toHaveBeenCalledWith('staff_move_lesson', { p_lesson_id: 'l1', p_expected_updated_at: TOKEN, p_target_module_id: 'm2' })
+  })
+
+  it('setLessonArchived calls app.staff_set_lesson_archived', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await setLessonArchived(client, 'l1', TOKEN, true)
+    expect(rpc).toHaveBeenCalledWith('staff_set_lesson_archived', { p_lesson_id: 'l1', p_expected_updated_at: TOKEN, p_archived: true })
+  })
+
+  it('deleteLesson calls app.staff_delete_lesson', async () => {
+    const { client, rpc } = rpcClient({ data: null, error: null })
+    await deleteLesson(client, 'l1', TOKEN)
+    expect(rpc).toHaveBeenCalledWith('staff_delete_lesson', { p_lesson_id: 'l1', p_expected_updated_at: TOKEN })
+  })
+
+  it('throws typed errors with the stable code', async () => {
+    const stale = rpcClient({ data: null, error: { message: 'stale_target', code: 'CR001' } })
+    await expect(updateLesson(stale.client, 'l1', TOKEN, FIELDS)).rejects.toMatchObject({ code: 'stale_target' })
+    const gate = rpcClient({ data: null, error: { message: 'publish_gate_violated', code: 'CR004' } })
+    await expect(addLesson(gate.client, 'm1', FIELDS, false)).rejects.toMatchObject({ code: 'publish_gate_violated' })
+    const sales = rpcClient({ data: null, error: { message: 'course_has_sales', code: 'CR003' } })
+    await expect(deleteLesson(sales.client, 'l1', TOKEN)).rejects.toMatchObject({ code: 'course_has_sales' })
+  })
+
+  it('maps a 401 to unauthorized', async () => {
+    const { client } = rpcClient({ data: null, error: { message: 'JWT expired' }, status: 401 })
+    await expect(deleteLesson(client, 'l1', TOKEN)).rejects.toMatchObject({ code: 'unauthorized' })
   })
 })

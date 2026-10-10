@@ -67,7 +67,16 @@ export interface LessonNode {
   readonly durationSeconds: number | null;
   readonly isFreePreview: boolean;
   readonly archivedAt: string | null;
+  // updated_at exactly as read (microsecond string); token of the optimistic lock.
+  readonly updatedAt: string;
   readonly video: LessonVideo | null; // null = no active video
+}
+
+// Editable lesson fields (the video is managed separately, see ticket #19).
+export interface LessonFieldsInput {
+  readonly title: string;
+  readonly durationSeconds: number | null; // null = unknown
+  readonly isFreePreview: boolean;
 }
 
 export interface ModuleNode {
@@ -90,13 +99,17 @@ export type AdminCoursesErrorCode =
   | 'invalid_input'
   | 'stale_target'
   | 'module_not_empty' // a module that still has lessons cannot be deleted
-  | 'course_has_sales'; // a course with enrollments or orders only archives
+  | 'course_has_sales' // a course with enrollments or orders only archives
+  | 'publish_gate_violated'; // an active lesson without video in a published course
 
 // Field limits mirrored by app_private.assert_valid_course_fields and the
 // courses_price_range CHECK. Change SQL and this file together.
 export const MAX_COURSE_TITLE_LENGTH = 200;
 export const MAX_COURSE_DESCRIPTION_LENGTH = 5000;
 export const MAX_MODULE_TITLE_LENGTH = 200; // mirrored by app_private.assert_valid_module_title
+export const MAX_LESSON_TITLE_LENGTH = 200; // mirrored by app_private.assert_valid_lesson_fields
+export const MIN_LESSON_DURATION_SECONDS = 1; // optional; null = unknown
+export const MAX_LESSON_DURATION_SECONDS = 86_400;
 export const MIN_PRICE_CENTS = 1;
 export const MAX_PRICE_CENTS = 10_000_000; // R$ 100.000,00
 export const MIN_ACCESS_DURATION_DAYS = 1;
@@ -111,6 +124,7 @@ export const ADMIN_COURSES_ERROR_STATUS: Readonly<Record<AdminCoursesErrorCode, 
   stale_target: 409,
   module_not_empty: 409,
   course_has_sales: 409,
+  publish_gate_violated: 409,
 };
 
 // Editable course fields. The editor always sends the full state; a tutor
