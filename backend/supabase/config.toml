@@ -408,6 +408,9 @@ verify_jwt = false
 [functions.admin-users]
 verify_jwt = true
 
+[functions.admin-courses]
+verify_jwt = true
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

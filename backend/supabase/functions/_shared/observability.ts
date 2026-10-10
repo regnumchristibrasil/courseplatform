@@ -28,6 +28,8 @@ export type ServerEventName =
   | 'admin_user_status_changed'
   | 'admin_user_status_sync_failed'
   | 'admin_action_denied'
+  | 'admin_course_price_changed'
+  | 'admin_course_duration_changed'
   | 'email_sent'
   | 'email_dead_lettered'
   | 'reconcile_tick';
