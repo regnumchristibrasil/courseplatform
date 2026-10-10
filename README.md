@@ -234,6 +234,12 @@ deno task test:seed-dev  # Apenas se quiser seeds após testes
 Alternativa: depois de `deno task seed:dev`, há `tests-dev/` com testes SQL que assumem
 fixtures já carregadas (comportamento de integração, não isolamento).
 
+## Identidade visual e UI
+
+A especificação de UI está em `docs/ui/ui-specification.md` e é baseada no manual de
+identidade visual (`docs/ui/referencias/`) e em capturas de tela de referência da área do
+aluno (`frontend/examples/`). Cores, tipografia e logotipo vêm só do manual.
+
 ## Administração de usuários (gestão de papéis e desativação)
 
 A plataforma inclui uma área `/admin` para listar usuários, trocar papéis (student,
