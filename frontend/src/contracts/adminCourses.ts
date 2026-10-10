@@ -52,7 +52,39 @@ export interface CourseListRow {
   readonly pendingOrderCount: number;
 }
 
-export type AdminCoursesErrorCode = 'forbidden';
+export type VideoProvider = 'youtube' | 'panda';
+
+// Active video reference of a lesson, readable only through the staff RPCs.
+export interface LessonVideo {
+  readonly provider: VideoProvider;
+  readonly externalRef: string;
+}
+
+export interface LessonNode {
+  readonly lessonId: string;
+  readonly title: string;
+  readonly position: number;
+  readonly durationSeconds: number | null;
+  readonly isFreePreview: boolean;
+  readonly archivedAt: string | null;
+  readonly video: LessonVideo | null; // null = no active video
+}
+
+export interface ModuleNode {
+  readonly moduleId: string;
+  readonly title: string;
+  readonly position: number;
+  readonly archivedAt: string | null;
+  readonly lessons: readonly LessonNode[]; // ordered by position, archived included
+}
+
+// Result of app.staff_get_course(): the whole tree, archived items included.
+export interface CourseTree extends CourseListRow {
+  readonly description: string | null;
+  readonly modules: readonly ModuleNode[]; // ordered by position, archived included
+}
+
+export type AdminCoursesErrorCode = 'forbidden' | 'not_found';
 
 const COMMERCIAL_ACTIONS: readonly CourseAction[] = ['edit_price', 'edit_access_duration'];
 

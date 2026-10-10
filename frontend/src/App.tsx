@@ -13,6 +13,7 @@ import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SignupPage } from './pages/SignupPage'
 
+const AdminCourseDetailPage = lazy(() => import('./features/admin/courses/AdminCourseDetailPage'))
 const AdminCoursesPage = lazy(() => import('./features/admin/courses/AdminCoursesPage'))
 const AdminUsersPage = lazy(() => import('./features/admin/users/AdminUsersPage'))
 
@@ -49,6 +50,14 @@ export function App() {
                     element={
                       <Suspense fallback={<Spinner label="Carregando página..." />}>
                         <AdminCoursesPage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="admin/courses/:courseId"
+                    element={
+                      <Suspense fallback={<Spinner label="Carregando página..." />}>
+                        <AdminCourseDetailPage />
                       </Suspense>
                     }
                   />

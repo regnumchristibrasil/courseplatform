@@ -1,0 +1,53 @@
+.tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.item:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.item[aria-selected='true'] {
+  background: rgba(127, 127, 127, 0.22);
+  font-weight: 600;
+}
+
+.level1 {
+  font-weight: 600;
+}
+
+.level2 {
+  padding-left: 24px;
+}
+
+.level3 {
+  padding-left: 44px;
+}
+
+.archived .label {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.label {
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,25 @@
+.panel {
+  text-align: left;
+  min-width: 0;
+}
+
+.panel h2 {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.fields dt {
+  font-weight: 600;
+}
+
+.fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

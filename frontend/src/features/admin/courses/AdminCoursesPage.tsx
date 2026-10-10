@@ -1,27 +1,26 @@
+import { Link } from 'react-router-dom'
 import { Alert } from '../../../components/ui/Alert'
-import { Badge, type BadgeVariant } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { Spinner } from '../../../components/ui/Spinner'
 import { Table, type TableColumn } from '../../../components/ui/Table'
-import type { CourseListRow, CourseStatus } from '../../../contracts/adminCourses'
+import type { CourseListRow } from '../../../contracts/adminCourses'
 import { AdminCoursesApiError } from './api'
-import { formatAccessDuration, formatPrice, STATUS_LABELS } from './format'
+import { CourseStatusBadge } from './CourseStatusBadge'
+import { formatAccessDuration, formatPrice } from './format'
 import { useAdminCourses } from './useAdminCourses'
 import styles from './AdminCoursesPage.module.css'
 
-const STATUS_VARIANTS: Readonly<Record<CourseStatus, BadgeVariant>> = {
-  draft: 'neutral',
-  published: 'success',
-  archived: 'warning',
-}
-
 const COLUMNS: readonly TableColumn<CourseListRow>[] = [
-  { key: 'title', header: 'Curso' },
+  {
+    key: 'title',
+    header: 'Curso',
+    render: (row) => <Link to={`/admin/courses/${row.courseId}`}>{row.title}</Link>,
+  },
   {
     key: 'status',
     header: 'Status',
-    render: (row) => <Badge variant={STATUS_VARIANTS[row.status]}>{STATUS_LABELS[row.status]}</Badge>,
+    render: (row) => <CourseStatusBadge status={row.status} />,
   },
   { key: 'priceCents', header: 'Preço', render: (row) => formatPrice(row.priceCents) },
   { key: 'accessDurationDays', header: 'Acesso', render: (row) => formatAccessDuration(row.accessDurationDays) },

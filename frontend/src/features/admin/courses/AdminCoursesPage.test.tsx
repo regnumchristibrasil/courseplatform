@@ -54,6 +54,14 @@ describe('AdminCoursesPage', () => {
     expect(screen.getByText('3 curso(s)')).toBeInTheDocument()
   })
 
+  it('links each course title to its detail page', async () => {
+    vi.mocked(listStaffCourses).mockResolvedValue([course({ courseId: 'c9', title: 'Curso Z' })])
+
+    renderWithProviders(<AdminCoursesPage />)
+
+    expect(await screen.findByRole('link', { name: 'Curso Z' })).toHaveAttribute('href', '/admin/courses/c9')
+  })
+
   it('shows an empty state when there are no courses', async () => {
     vi.mocked(listStaffCourses).mockResolvedValue([])
     renderWithProviders(<AdminCoursesPage />)
