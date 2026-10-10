@@ -5,6 +5,7 @@ import { Layout } from './components/Layout'
 import { Spinner } from './components/ui/Spinner'
 import { PostHogProvider } from './features/analytics/PostHogProvider'
 import { AuthProvider } from './features/auth/AuthProvider'
+import { isCourseStaffRole } from './features/authz/coursePermissions'
 import { RoleRoute } from './features/authz/RoleRoute'
 import { queryClient } from './lib/queryClient'
 import { CatalogPage } from './pages/CatalogPage'
@@ -12,6 +13,7 @@ import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SignupPage } from './pages/SignupPage'
 
+const AdminCoursesPage = lazy(() => import('./features/admin/courses/AdminCoursesPage'))
 const AdminUsersPage = lazy(() => import('./features/admin/users/AdminUsersPage'))
 
 // Composition root only — no business logic lives here. Each provider and
@@ -37,6 +39,16 @@ export function App() {
                     element={
                       <Suspense fallback={<Spinner label="Carregando página..." />}>
                         <AdminUsersPage />
+                      </Suspense>
+                    }
+                  />
+                </Route>
+                <Route element={<RoleRoute allowed={isCourseStaffRole} />}>
+                  <Route
+                    path="admin/courses"
+                    element={
+                      <Suspense fallback={<Spinner label="Carregando página..." />}>
+                        <AdminCoursesPage />
                       </Suspense>
                     }
                   />

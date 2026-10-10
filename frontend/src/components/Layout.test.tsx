@@ -104,6 +104,24 @@ describe('Layout', () => {
       expect(screen.queryByRole('link', { name: 'Administração' })).not.toBeInTheDocument()
     })
 
+    it.each(['tutor', 'admin', 'superadmin'] as const)('shows Cursos for active %s', async (role) => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role, isActive: true })
+      renderLayout(authed())
+      expect(await screen.findByRole('link', { name: 'Cursos' })).toHaveAttribute('href', '/admin/courses')
+    })
+
+    it('hides Cursos for students and inactive tutors', async () => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+      const first = renderLayout(authed())
+      await vi.waitFor(() => expect(fetchCurrentAccess).toHaveBeenCalled())
+      expect(screen.queryByRole('link', { name: 'Cursos' })).not.toBeInTheDocument()
+      first.unmount()
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'tutor', isActive: false })
+      renderLayout(authed())
+      await vi.waitFor(() => expect(fetchCurrentAccess).toHaveBeenCalledTimes(2))
+      expect(screen.queryByRole('link', { name: 'Cursos' })).not.toBeInTheDocument()
+    })
+
     it('hides Administração and skips the access query when unauthenticated', () => {
       renderLayout(buildAuthValue())
       expect(screen.queryByRole('link', { name: 'Administração' })).not.toBeInTheDocument()

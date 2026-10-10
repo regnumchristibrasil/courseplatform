@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchCurrentAccess } from './features/authz/currentAccessApi'
+import { listStaffCourses } from './features/admin/courses/api'
 import { listAdminUsers } from './features/admin/users/api'
 import { App } from './App'
 
@@ -13,6 +14,10 @@ vi.mock('./features/auth/AuthProvider', async () => {
   return { AuthProvider: ({ children }: { children: ReactNode }) => <Ctx.Provider value={build()}>{children}</Ctx.Provider> }
 })
 vi.mock('./features/authz/currentAccessApi', () => ({ fetchCurrentAccess: vi.fn() }))
+vi.mock('./features/admin/courses/api', async (orig) => ({
+  ...(await orig<typeof import('./features/admin/courses/api')>()),
+  listStaffCourses: vi.fn(),
+}))
 vi.mock('./features/admin/users/api', async (orig) => ({
   ...(await orig<typeof import('./features/admin/users/api')>()),
   listAdminUsers: vi.fn(),
@@ -25,6 +30,7 @@ vi.mock('./lib/queryClient', async () => {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(listAdminUsers).mockResolvedValue({ users: [], total: 0 })
+  vi.mocked(listStaffCourses).mockResolvedValue([])
 })
 
 describe('App admin routes', () => {
@@ -38,6 +44,27 @@ describe('App admin routes', () => {
 
   it('renders NotFound at /admin/users for non-staff', async () => {
     vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    window.history.pushState({}, '', '/admin/users')
+    render(<App />)
+    expect(await screen.findByText('Página não encontrada')).toBeInTheDocument()
+  })
+
+  it.each(['tutor', 'admin', 'superadmin'] as const)('renders the course list at /admin/courses for %s', async (role) => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role, isActive: true })
+    window.history.pushState({}, '', '/admin/courses')
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Cursos' })).toBeInTheDocument()
+  })
+
+  it('renders NotFound at /admin/courses for students', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    window.history.pushState({}, '', '/admin/courses')
+    render(<App />)
+    expect(await screen.findByText('Página não encontrada')).toBeInTheDocument()
+  })
+
+  it('keeps /admin/users closed to tutors', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'tutor', isActive: true })
     window.history.pushState({}, '', '/admin/users')
     render(<App />)
     expect(await screen.findByText('Página não encontrada')).toBeInTheDocument()

@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { Outlet } from 'react-router-dom'
+import type { Role } from '../../contracts/adminUsers'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Spinner } from '../../components/ui/Spinner'
@@ -15,7 +16,11 @@ import { useCurrentAccess } from './useCurrentAccess'
 // Falha fechada: nunca renderiza conteúdo de equipe sem confirmação.
 // Resposta de sucesso não-equipe/inativo -> 404 (decisão 7, não revela a rota);
 // erro de carregamento sem dados -> alerta com nova tentativa.
-function StaffGate() {
+interface StaffGateProps {
+  readonly allowed: (role: Role) => boolean
+}
+
+function StaffGate({ allowed }: StaffGateProps) {
   const queryClient = useQueryClient()
   const { data, error, isPending, isError, refetch } = useCurrentAccess()
   const handleSessionExpiry = useSessionExpiryHandler()
@@ -45,18 +50,24 @@ function StaffGate() {
       </Alert>
     )
   }
-  if (!data || !data.isActive || !isStaffRole(data.role)) {
+  if (!data || !data.isActive || !allowed(data.role)) {
     return <NotFoundPage />
   }
   return <Outlet />
 }
 
+export interface RoleRouteProps {
+  // Predicado de papel; o padrão é admin/superadmin (gestão de usuários).
+  readonly allowed?: (role: Role) => boolean
+}
+
 // Layout route:
 //   <Route element={<RoleRoute />}> <Route path="admin/users" .../> </Route>
-export function RoleRoute() {
+//   <Route element={<RoleRoute allowed={isCourseStaffRole} />}> ... </Route>
+export function RoleRoute({ allowed = isStaffRole }: RoleRouteProps = {}) {
   return (
     <ProtectedRoute>
-      <StaffGate />
+      <StaffGate allowed={allowed} />
     </ProtectedRoute>
   )
 }

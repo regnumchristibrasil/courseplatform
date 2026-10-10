@@ -7,6 +7,7 @@ import { AuthContext, type AuthContextValue } from '../auth/AuthContext'
 import { buildAuth, buildSession, buildUser } from '../../test/renderWithProviders'
 import { AdminUsersApiError } from '../admin/users/api'
 import { fetchCurrentAccess } from './currentAccessApi'
+import { isCourseStaffRole } from './coursePermissions'
 import { RoleRoute } from './RoleRoute'
 
 vi.mock('./currentAccessApi', () => ({ fetchCurrentAccess: vi.fn() }))
@@ -36,6 +37,41 @@ function renderRoute(auth: AuthContextValue = AUTHED) {
   )
   return { ...result, queryClient, invalidate }
 }
+
+describe('RoleRoute with a custom role predicate', () => {
+  function renderCourseRoute() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
+      <AuthContext.Provider value={AUTHED}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/courses']}>
+            <Routes>
+              <Route element={<RoleRoute allowed={isCourseStaffRole} />}>
+                <Route path="/courses" element={<p>Courses content</p>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthContext.Provider>,
+    )
+  }
+
+  it.each(['tutor', 'admin', 'superadmin'] as const)('renders content for active %s', async (role) => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role, isActive: true })
+    renderCourseRoute()
+    expect(await screen.findByText('Courses content')).toBeInTheDocument()
+  })
+
+  it('renders NotFound for students and inactive tutors', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    const first = renderCourseRoute()
+    expect(await screen.findByText('Página não encontrada')).toBeInTheDocument()
+    first.unmount()
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'tutor', isActive: false })
+    renderCourseRoute()
+    expect(await screen.findByText('Página não encontrada')).toBeInTheDocument()
+  })
+})
 
 describe('RoleRoute', () => {
   beforeEach(() => {
