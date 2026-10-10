@@ -100,7 +100,7 @@ declare
   c_max_price constant int := 10000000;
   c_max_duration constant int := 36500; -- ~100 anos: evita overflow de interval
 begin
-  if p_title is null or btrim(p_title) = '' or char_length(btrim(p_title)) > c_max_title
+  if p_title is null or btrim(p_title, E' \t\r\n') = '' or char_length(btrim(p_title, E' \t\r\n')) > c_max_title
      or (p_description is not null and char_length(p_description) > c_max_description)
      or (p_price_cents is not null and p_price_cents not between 1 and c_max_price)
      or (p_access_duration_days is not null and p_access_duration_days not between 1 and c_max_duration) then

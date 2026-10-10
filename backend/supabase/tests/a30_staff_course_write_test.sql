@@ -1,7 +1,7 @@
 -- A30 -- app.staff_create_course / app.staff_update_course, course audit
 -- append-only, price/status database checks (ticket #16).
 BEGIN;
-SELECT plan(45);
+SELECT plan(46);
 
 INSERT INTO auth.users (id, email) VALUES
   ('11111111-1111-1111-1111-111111111111', 'superadmin@example.com'),
@@ -74,6 +74,7 @@ SELECT lives_ok($$ SELECT * FROM app.staff_create_course('Tutor draft', 'about',
 SELECT throws_ok($$ SELECT * FROM app.staff_create_course('T', NULL, 5000, NULL) $$, '42501', 'forbidden', 'tutor cannot set price on create');
 SELECT throws_ok($$ SELECT * FROM app.staff_create_course('T', NULL, NULL, 30) $$, '42501', 'forbidden', 'tutor cannot set duration on create');
 SELECT throws_ok($$ SELECT * FROM app.staff_create_course('   ', NULL, NULL, NULL) $$, '22023', 'invalid_input', 'blank title is invalid');
+SELECT throws_ok($$ SELECT * FROM app.staff_create_course(E'\t\n', NULL, NULL, NULL) $$, '22023', 'invalid_input', 'tab/newline-only title is invalid');
 SELECT throws_ok($$ SELECT * FROM app.staff_create_course(repeat('x', 201), NULL, NULL, NULL) $$, '22023', 'invalid_input', 'title above 200 chars is invalid');
 
 -- Create as admin -------------------------------------------------------------
