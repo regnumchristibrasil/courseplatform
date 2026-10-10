@@ -648,6 +648,30 @@ frozen design's stated security boundaries.
       deferred admin UI, LGPD retention)
 - [ ] D4 — `docs/runbook-youtube-to-panda.md`
 
+## Gestão de cursos em /admin (tickets #17-#21)
+
+Especificação em #2 (mapa) e ADR 0002; vocabulário em `GLOSSARY.md`.
+
+- [x] #17 módulos: adicionar, renomear, reordenar, arquivar, excluir (A31)
+- [x] #18 aulas: adicionar, editar, reordenar, mover, arquivar, excluir (A32)
+- [x] #19 vídeo da aula: definir e substituir, com parser compartilhado (A33)
+- [x] #20 transições de status, portão de publicação e exclusão de curso (A34)
+- [x] #21 E2E dos caminhos críticos (`frontend/e2e/admin-courses.spec.ts`) e remoção do protótipo
+
+O protótipo da UI nunca entrou em `main`: vive só no branch `prototype/admin-courses`
+(local e `origin`), então não há diretório, rota, provider nem script `proto:courses` a
+remover. O branch foi mantido; apagá-lo é decisão separada.
+
+E2E: pré-requisitos no README ("Testando E2E com Playwright"). Dois pontos que
+pegaram na primeira execução: `supabase functions serve` precisa de `POSTHOG_API_KEY` e
+`POSTHOG_HOST` no arquivo de env (status de curso passa pela Edge Function), e o banner de
+consentimento (LGPD) cobre o rodapé, então `loginViaUi` recusa o consentimento de antemão.
+
+Desvio do critério do ticket: visitante anônimo em `/admin/courses` é redirecionado para
+`/login` (`ProtectedRoute`, comportamento já coberto por testes unitários), não recebe 404; o
+E2E afirma o redirecionamento e a ausência de conteúdo administrativo. O 404 vale para
+usuário autenticado sem papel de equipe.
+
 ## Decisions log
 
 - 2026-08-23 — PIX gateway: Mercado Pago (Efí ruled out — mTLS requirement

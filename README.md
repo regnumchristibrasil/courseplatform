@@ -128,15 +128,26 @@ cd backend
 supabase start
 supabase db reset
 deno task seed:dev  # carrega fixtures de dev
-# Create .env outside the repo with fake values:
+# Create .env outside the repo with fake values (inclui POSTHOG_API_KEY e
+# POSTHOG_HOST: a função admin-courses não sobe sem eles):
 supabase functions serve --env-file /tmp/supabase-dev.env
 ```
+
+As transições de status de curso passam pela Edge Function `admin-courses`; sem
+`supabase functions serve` esses fluxos falham com "Não foi possível concluir a alteração".
 
 **Terminal 2 (frontend):**
 ```bash
 cd frontend
 npm run test:e2e
 ```
+
+Fluxos cobertos (`frontend/e2e/`):
+- `admin-users.spec.ts`: gestão de usuários (papel, ativação, conflito `stale_target`, 404 para aluno).
+- `admin-courses.spec.ts`: gestão de cursos em `/admin/courses` — admin publica pelo portão de
+  publicação; tutor edita conteúdo e publica, mas não altera preço nem duração; exclusão bloqueada
+  em curso com vendas; conflito de edição se recupera após reler; aluno vê 404 e visitante anônimo
+  é redirecionado ao login. Os cursos `E2E ...` são recriados a cada teste (`courseFixtures.ts`).
 
 Playwright inicia um dev server na porta 5199 automaticamente. Variáveis de env para E2E
 (definidas em `frontend/playwright.config.ts`):

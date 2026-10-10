@@ -21,8 +21,8 @@ a usuários com papel superior.
 
 **Tutor**  
 Papel de conteúdo. Acessa a área de gestão de cursos e pode editar módulos e aulas,
-publicar, arquivar e excluir cursos, mas não pode alterar o preço. Sem acesso à gestão de
-usuários. Pode ser gerenciado por `admin` e `superadmin`.
+publicar, arquivar e excluir cursos, mas não pode alterar o preço nem a duração de acesso. Sem acesso à
+gestão de usuários. Pode ser gerenciado por `admin` e `superadmin`.
 
 **Aluno (Student)**  
 Papel padrão atribuído a todo novo usuário. Único papel sem poderes administrativos.
@@ -68,7 +68,8 @@ Valor em reais, maior que zero e até R$ 100.000,00. Curso gratuito está fora d
 Somente `admin` e `superadmin` o alteram.
 
 **Duração de acesso**  
-Dias de acesso após a matrícula; vazio significa acesso vitalício.
+Dias de acesso após a matrícula; vazio significa acesso vitalício. Como o preço, só `admin` e
+`superadmin` a alteram.
 
 **Acesso do aluno**  
 Quem comprou um curso o mantém até a data de expiração, mesmo que o curso seja despublicado

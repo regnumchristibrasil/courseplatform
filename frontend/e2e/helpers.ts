@@ -1,13 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { expect, type Locator, type Page } from '@playwright/test'
 import { FIXTURE_PASSWORD, FIXTURES, type FixtureUser } from './fixtures.ts'
+import { runSql, sqlLiteral } from './db.ts'
 import { resolveLocalSupabase } from './localSupabase.ts'
-
-const DB_CONTAINER = process.env.E2E_DB_CONTAINER ?? 'supabase_db_backend'
-
-function sqlLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
 
 function buildResetSql(): string {
   const values = Object.values(FIXTURES)
@@ -21,11 +15,7 @@ select count(*) from auth.users where id in (${Object.values(FIXTURES).map((u) =
 // Devolve papel/status dos usuários de fixture ao estado do seed e levanta bans do Auth.
 export async function resetFixtures(): Promise<void> {
   const { apiUrl, serviceKey } = resolveLocalSupabase()
-  const output = execFileSync(
-    'docker',
-    ['exec', '-i', DB_CONTAINER, 'psql', '-U', 'postgres', '-d', 'postgres', '-t', '-A', '-v', 'ON_ERROR_STOP=1'],
-    { input: buildResetSql(), encoding: 'utf8' },
-  )
+  const output = runSql(buildResetSql())
   if (!/(^|\n)5\s*$/.test(output.trim())) {
     throw new Error('Fixture users missing. Run `deno task seed:dev` in backend/ (see npm run test:e2e:setup).')
   }
@@ -54,6 +44,8 @@ export async function passwordSignIn(user: FixtureUser): Promise<{ readonly ok: 
 
 // Login pela UI (pt-BR) e espera o cabeçalho autenticado.
 export async function loginViaUi(page: Page, user: FixtureUser): Promise<void> {
+  // O banner de consentimento (LGPD) cobre o rodapé e intercepta cliques: recusa de antemão.
+  await page.addInitScript("window.localStorage.setItem('courseplatform_analytics_consent', 'denied')")
   await page.goto('/login')
   await page.getByLabel('E-mail').fill(user.email)
   await page.getByLabel('Senha').fill(FIXTURE_PASSWORD)
