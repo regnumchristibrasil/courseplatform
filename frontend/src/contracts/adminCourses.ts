@@ -72,11 +72,25 @@ export interface LessonNode {
   readonly video: LessonVideo | null; // null = no active video
 }
 
-// Editable lesson fields (the video is managed separately, see ticket #19).
+// Editable lesson fields (the video is managed separately: staff_set_lesson_video).
 export interface LessonFieldsInput {
   readonly title: string;
   readonly durationSeconds: number | null; // null = unknown
   readonly isFreePreview: boolean;
+}
+
+// Another lesson already using the same video. Titles only: shown to staff as a
+// warning, never an error (the same video may serve several lessons).
+export interface VideoDuplicate {
+  readonly courseTitle: string;
+  readonly lessonTitle: string;
+}
+
+// Result of app.staff_set_lesson_video(): the canonical stored reference.
+export interface SetLessonVideoResult {
+  readonly provider: VideoProvider;
+  readonly externalRef: string;
+  readonly duplicates: readonly VideoDuplicate[];
 }
 
 export interface ModuleNode {

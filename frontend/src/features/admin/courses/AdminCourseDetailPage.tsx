@@ -11,6 +11,7 @@ import { CourseForm } from './CourseForm'
 import { CourseDetailPanel } from './CourseDetailPanel'
 import { CourseTreeView } from './CourseTreeView'
 import { AddLessonAction, LessonActions } from './LessonActions'
+import { LessonVideoAction } from './LessonVideoAction'
 import { AddModuleAction, ModuleActions } from './ModuleActions'
 import { COURSE_SELECTION, resolveSelection, type TreeSelection } from './courseTreeModel'
 import { describeSaveError } from './saveErrors'
@@ -112,7 +113,10 @@ export function AdminCourseDetailPage() {
                 </>
               ) : null}
               {canEditContent && resolved?.kind === 'lesson' ? (
-                <LessonActions key={resolved.lesson.lessonId} tree={tree} module={resolved.module} lesson={resolved.lesson} />
+                <>
+                  <LessonVideoAction key={`video-${resolved.lesson.lessonId}`} lesson={resolved.lesson} />
+                  <LessonActions key={resolved.lesson.lessonId} tree={tree} module={resolved.module} lesson={resolved.lesson} />
+                </>
               ) : null}
             </div>
           ) : null}

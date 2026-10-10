@@ -17,6 +17,7 @@ import {
   reorderModules,
   saveCourse,
   setLessonArchived,
+  setLessonVideo,
   setModuleArchived,
   updateLesson,
 } from './api'
@@ -440,5 +441,52 @@ describe('lesson mutations', () => {
   it('maps a 401 to unauthorized', async () => {
     const { client } = rpcClient({ data: null, error: { message: 'JWT expired' }, status: 401 })
     await expect(deleteLesson(client, 'l1', TOKEN)).rejects.toMatchObject({ code: 'unauthorized' })
+  })
+})
+
+describe('setLessonVideo', () => {
+  const TOKEN = '2026-01-03T10:00:00.123456+00:00'
+  const RESULT = {
+    provider: 'youtube',
+    external_ref: 'dQw4w9WgXcQ',
+    duplicates: [{ course_title: 'Curso B', lesson_title: 'Aula 3' }],
+  }
+
+  it('calls app.staff_set_lesson_video with the raw input and the token untouched', async () => {
+    const { client, schema, rpc } = rpcClient({ data: RESULT, error: null })
+    await setLessonVideo(client, 'l1', TOKEN, ' https://youtu.be/dQw4w9WgXcQ ')
+    expect(schema).toHaveBeenCalledWith('app')
+    expect(rpc).toHaveBeenCalledWith('staff_set_lesson_video', {
+      p_lesson_id: 'l1',
+      p_expected_updated_at: TOKEN,
+      p_video_input: ' https://youtu.be/dQw4w9WgXcQ ',
+    })
+  })
+
+  it('maps the response to camelCase, duplicates included', async () => {
+    const { client } = rpcClient({ data: RESULT, error: null })
+    await expect(setLessonVideo(client, 'l1', TOKEN, 'dQw4w9WgXcQ')).resolves.toEqual({
+      provider: 'youtube',
+      externalRef: 'dQw4w9WgXcQ',
+      duplicates: [{ courseTitle: 'Curso B', lessonTitle: 'Aula 3' }],
+    })
+  })
+
+  it.each([
+    ['not an object', 'x'],
+    ['unknown provider', { ...RESULT, provider: 'vimeo' }],
+    ['empty reference', { ...RESULT, external_ref: '' }],
+    ['duplicates not a list', { ...RESULT, duplicates: null }],
+    ['malformed duplicate', { ...RESULT, duplicates: [{ course_title: 'A' }] }],
+  ])('rejects a malformed payload: %s', async (_label, data) => {
+    const { client } = rpcClient({ data, error: null })
+    await expect(setLessonVideo(client, 'l1', TOKEN, 'dQw4w9WgXcQ')).rejects.toThrow('Invalid admin courses payload.')
+  })
+
+  it('throws typed errors with the stable code', async () => {
+    const invalid = rpcClient({ data: null, error: { message: 'invalid_input', code: '22023' } })
+    await expect(setLessonVideo(invalid.client, 'l1', TOKEN, 'x')).rejects.toMatchObject({ code: 'invalid_input' })
+    const stale = rpcClient({ data: null, error: { message: 'stale_target', code: 'CR001' } })
+    await expect(setLessonVideo(stale.client, 'l1', TOKEN, 'dQw4w9WgXcQ')).rejects.toMatchObject({ code: 'stale_target' })
   })
 })

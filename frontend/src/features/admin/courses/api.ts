@@ -11,6 +11,8 @@ import {
   type LessonVideo,
   type ModuleNode,
   type SaveCourseResponse,
+  type SetLessonVideoResult,
+  type VideoDuplicate,
   type VideoProvider,
 } from '../../../contracts/adminCourses'
 
@@ -270,3 +272,35 @@ export const setLessonArchived = (client: SupabaseClient, lessonId: string, expe
 
 export const deleteLesson = (client: SupabaseClient, lessonId: string, expectedUpdatedAt: string) =>
   callStaffRpc(client, 'staff_delete_lesson', { p_lesson_id: lessonId, p_expected_updated_at: expectedUpdatedAt })
+
+function mapDuplicate(raw: unknown): VideoDuplicate {
+  if (!isRecord(raw) || typeof raw.course_title !== 'string' || typeof raw.lesson_title !== 'string') throw invalidPayload()
+  return { courseTitle: raw.course_title, lessonTitle: raw.lesson_title }
+}
+
+export function mapSetLessonVideo(raw: unknown): SetLessonVideoResult {
+  if (!isRecord(raw)) throw invalidPayload()
+  const { provider, external_ref, duplicates } = raw
+  if (typeof provider !== 'string' || !(VIDEO_PROVIDERS as readonly string[]).includes(provider) ||
+      !isNonEmptyString(external_ref) || !Array.isArray(duplicates)) {
+    throw invalidPayload()
+  }
+  return { provider: provider as VideoProvider, externalRef: external_ref, duplicates: duplicates.map(mapDuplicate) }
+}
+
+// Define ou substitui o vídeo da aula. Envia o texto como digitado: o servidor é
+// quem normaliza e valida o formato (o parser do cliente só antecipa a mensagem).
+export async function setLessonVideo(
+  client: SupabaseClient,
+  lessonId: string,
+  expectedUpdatedAt: string,
+  videoInput: string,
+): Promise<SetLessonVideoResult> {
+  const { data, error, status } = await client.schema(APP_SCHEMA).rpc('staff_set_lesson_video', {
+    p_lesson_id: lessonId,
+    p_expected_updated_at: expectedUpdatedAt,
+    p_video_input: videoInput,
+  })
+  if (error) throw toApiError(error, status)
+  return mapSetLessonVideo(data)
+}
