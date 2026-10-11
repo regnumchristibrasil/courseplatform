@@ -1,0 +1,60 @@
+name: Deploy backend
+
+# Manual on purpose: production is never deployed from a push.
+# Each GitHub Environment (staging, production) holds its own secrets and,
+# for production, a required-reviewers rule. See docs/deploy.md.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+      migrations:
+        description: Apply database migrations
+        type: boolean
+        default: true
+      functions:
+        description: Deploy Edge Functions
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Preview pending migrations
+        if: ${{ inputs.migrations }}
+        run: supabase db push --dry-run
+
+      - name: Apply migrations
+        if: ${{ inputs.migrations }}
+        run: supabase db push
+
+      - name: Deploy Edge Functions
+        if: ${{ inputs.functions }}
+        run: supabase functions deploy
