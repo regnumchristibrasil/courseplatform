@@ -27,21 +27,36 @@
 alter default privileges for role postgres in schema public
   revoke all on tables from anon, authenticated;
 
--- Existing public.* tables: the above only affects tables created AFTER
--- this statement runs, so explicitly strip the already-granted
--- TRUNCATE/REFERENCES/TRIGGER/MAINTAIN from anon/authenticated on every
--- table this project has created so far. SELECT/UPDATE grants added by
--- earlier migrations are untouched (REVOKE only removes the privileges
--- named here).
-revoke truncate, references, trigger, maintain on public.users from anon, authenticated;
-revoke truncate, references, trigger, maintain on public.courses from anon, authenticated;
-revoke truncate, references, trigger, maintain on public.lessons from anon, authenticated;
-revoke truncate, references, trigger, maintain on public.enrollments from anon, authenticated;
-revoke truncate, references, trigger, maintain on public.orders from anon, authenticated;
--- courses_public is a VIEW, but Postgres's default-privilege "TABLES"
--- target category also covers views/foreign tables, so it inherited the
--- same leaked grants as the five base tables above.
-revoke truncate, references, trigger, maintain on public.courses_public from anon, authenticated;
+-- Existing public.* relations: the statement above only affects tables
+-- created AFTER it runs, so reset every relation this project has created
+-- so far to its intended grants. This is a RESET (revoke ALL, then re-grant
+-- exactly what A2/A4/A6/A7 intend), not a partial revoke, so the result is
+-- the same no matter what the environment's bootstrap handed out:
+--   * local Supabase seeds a schema-scoped default of TRUNCATE/REFERENCES/
+--     TRIGGER/MAINTAIN only;
+--   * hosted Supabase seeds ALL privileges (SELECT/INSERT/UPDATE/DELETE
+--     included) for anon/authenticated/service_role, so a partial revoke of
+--     the four DDL-ish privileges left full client write grants in place
+--     and made the audit below fail on the first production `db push`.
+-- courses_public is a VIEW, but the default-privilege "TABLES" category also
+-- covers views, so it is reset together with the base tables.
+-- REVOKE on a table also drops column-level grants, hence the explicit
+-- re-grant of the users column UPDATE.
+-- service_role is not touched here: its full access is intended and
+-- granted explicitly by each table's own migration.
+revoke all on
+  public.users,
+  public.courses,
+  public.lessons,
+  public.enrollments,
+  public.orders,
+  public.courses_public
+from anon, authenticated;
+
+grant select on public.users to authenticated;
+grant update (full_name, avatar_url) on public.users to authenticated;
+grant select on public.courses, public.lessons, public.courses_public to anon, authenticated;
+grant select on public.enrollments, public.orders to authenticated;
 
 -- Two more parts:
 -- 1. app_private.audit_privileges(): a small, permanently-available

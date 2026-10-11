@@ -69,6 +69,16 @@ supabase db push
 - Nunca usar `supabase db reset` contra produção: apaga todos os dados.
 - Não carregar `seed.dev.sql` (fixtures de desenvolvimento).
 - **[verificar]** se `seed.sql` (dados iniciais) deve ser aplicado em produção e como.
+- O Supabase hospedado concede `ALL` em tabelas novas do schema `public` a `anon`,
+  `authenticated` e `service_role` (o ambiente local concede só TRUNCATE/REFERENCES/TRIGGER/
+  MAINTAIN). A migration A14 redefine os grants para o estado pretendido e a auditoria dela
+  aborta o `db push` se sobrar algo. Se falhar com `A14 grants audit failed`, inspecione:
+  ```sql
+  select table_name, grantee, privilege_type
+  from information_schema.role_table_grants
+  where table_schema = 'public' and grantee in ('anon', 'authenticated')
+  order by 1, 2, 3;
+  ```
 
 ### 4.3 Segredos das Edge Functions
 
