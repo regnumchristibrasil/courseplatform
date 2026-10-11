@@ -397,7 +397,7 @@ Há um teste de paridade (`backend/contracts/adminUsers.parity.test.ts`) que fal
 
 ## O que este README não cobre
 
-Deploy (Netlify, Supabase Pro, domínio verificado no Resend, credenciais
-de produção do Mercado Pago) e decisões de arquitetura (ADRs) ainda não
-foram documentados -- ver a seção "Track D" em `PROGRESS.md` para o estado
-atual dessa documentação.
+O procedimento de deploy (Netlify, Supabase, Resend, Mercado Pago) está em
+`docs/deploy.md`, em rascunho: ainda não foi executado contra um projeto real.
+Decisões de arquitetura estão em `docs/adr/`; ver também a seção "Track D" em
+`PROGRESS.md` para o estado atual da documentação.
