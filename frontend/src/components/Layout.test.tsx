@@ -23,15 +23,16 @@ function buildAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContextV
   }
 }
 
-function renderLayout(authValue: AuthContextValue) {
+function renderLayout(authValue: AuthContextValue, initialPath = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <AuthContext.Provider value={authValue}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={['/']}>
+        <MemoryRouter initialEntries={[initialPath]}>
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<p>Nested route content</p>} />
+              <Route path="/login" element={<p>Login content</p>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -76,6 +77,32 @@ describe('Layout', () => {
     await userInteraction.click(screen.getByRole('button', { name: /sair/i }))
 
     expect(authValue.signOut).toHaveBeenCalledTimes(1)
+  })
+
+  describe('header', () => {
+    it('links the brand to the home page and reserves a decorative logo slot', () => {
+      renderLayout(buildAuthValue())
+      const brand = screen.getByRole('link', { name: COMPANY_NAME })
+      expect(brand).toHaveAttribute('href', '/')
+      expect(brand.querySelector('[data-testid="logo-placeholder"]')).toHaveAttribute('aria-hidden', 'true')
+    })
+
+    it('exposes the main navigation landmark', () => {
+      renderLayout(buildAuthValue())
+      expect(screen.getByRole('navigation', { name: 'Principal' })).toBeInTheDocument()
+    })
+
+    it('marks only the current route as the active item', () => {
+      renderLayout(buildAuthValue(), '/login')
+      expect(screen.getByRole('link', { name: 'Entrar' })).toHaveAttribute('aria-current', 'page')
+      expect(screen.getByRole('link', { name: 'Catálogo' })).not.toHaveAttribute('aria-current')
+      expect(screen.getByRole('link', { name: 'Cadastrar' })).not.toHaveAttribute('aria-current')
+    })
+
+    it('marks the catalog as active on the home page', () => {
+      renderLayout(buildAuthValue(), '/')
+      expect(screen.getByRole('link', { name: 'Catálogo' })).toHaveAttribute('aria-current', 'page')
+    })
   })
 
   describe('admin link', () => {

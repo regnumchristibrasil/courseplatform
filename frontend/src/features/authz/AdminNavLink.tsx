@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { NavItem } from '../../components/NavItem'
 import { isCourseStaffRole } from './coursePermissions'
 import { isStaffRole } from './roles'
 import { useCurrentAccess } from './useCurrentAccess'
@@ -9,8 +9,8 @@ export function AdminNavLink() {
   if (!data || !data.isActive) return null
   return (
     <>
-      {isStaffRole(data.role) ? <Link to="/admin/users">Administração</Link> : null}
-      {isCourseStaffRole(data.role) ? <Link to="/admin/courses">Cursos</Link> : null}
+      {isStaffRole(data.role) ? <NavItem to="/admin/users">Administração</NavItem> : null}
+      {isCourseStaffRole(data.role) ? <NavItem to="/admin/courses">Cursos</NavItem> : null}
     </>
   )
 }
