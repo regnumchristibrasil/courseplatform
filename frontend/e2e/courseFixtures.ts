@@ -15,7 +15,7 @@ interface CourseSeed {
   readonly accessDurationDays: number | null
   readonly moduleTitle: string
   readonly lessons: readonly LessonSeed[]
-  readonly withActiveEnrollment?: boolean
+  readonly enrollment?: 'active' | 'expired'
 }
 
 export interface CourseFixture {
@@ -56,7 +56,7 @@ const COURSE_SEEDS = {
     accessDurationDays: null,
     moduleTitle: 'E2E Módulo vendido',
     lessons: [{ title: 'E2E Aula vendida', youtubeId: VIDEO_A }],
-    withActiveEnrollment: true,
+    enrollment: 'active',
   },
   stale: {
     id: 'e1000000-0000-0000-0000-000000000004',
@@ -66,6 +66,26 @@ const COURSE_SEEDS = {
     accessDurationDays: 30,
     moduleTitle: 'E2E Módulo concorrente',
     lessons: [{ title: 'E2E Aula concorrente', youtubeId: VIDEO_B }],
+  },
+  watch: {
+    id: 'e1000000-0000-0000-0000-000000000005',
+    title: 'E2E Curso do aluno',
+    status: 'published',
+    priceCents: 8000,
+    accessDurationDays: null,
+    moduleTitle: 'E2E Módulo do aluno',
+    lessons: [{ title: 'E2E Aula um', youtubeId: VIDEO_A }, { title: 'E2E Aula dois', youtubeId: VIDEO_B }],
+    enrollment: 'active',
+  },
+  expired: {
+    id: 'e1000000-0000-0000-0000-000000000006',
+    title: 'E2E Curso expirado',
+    status: 'published',
+    priceCents: 7000,
+    accessDurationDays: 30,
+    moduleTitle: 'E2E Módulo expirado',
+    lessons: [{ title: 'E2E Aula expirada', youtubeId: VIDEO_A }],
+    enrollment: 'expired',
   },
 } as const satisfies Readonly<Record<string, CourseSeed>>
 
@@ -94,17 +114,30 @@ select l.id, 'youtube', ${sqlLiteral(lesson.youtubeId)} from public.lessons l
 where l.course_id = ${sqlLiteral(seed.id)}::uuid and l.title = ${sqlLiteral(lesson.title)};`
 }
 
+const EXPIRED_GRANTED_DAYS_AGO = 60
+const EXPIRED_EXPIRES_DAYS_AGO = 30
+
+function enrollmentSql(seed: CourseSeed): string {
+  const studentId = sqlLiteral(FIXTURES.student.id)
+  const courseId = sqlLiteral(seed.id)
+  if (seed.enrollment === 'active') {
+    return `insert into public.enrollments (user_id, course_id) values (${studentId}::uuid, ${courseId}::uuid);`
+  }
+  if (seed.enrollment === 'expired') {
+    return `insert into public.enrollments (user_id, course_id, granted_at, expires_at)
+values (${studentId}::uuid, ${courseId}::uuid, now() - interval '${EXPIRED_GRANTED_DAYS_AGO} days', now() - interval '${EXPIRED_EXPIRES_DAYS_AGO} days');`
+  }
+  return ''
+}
+
 function courseSql(seed: CourseSeed): string {
   const days = seed.accessDurationDays === null ? 'null' : String(seed.accessDurationDays)
-  const enrollment = seed.withActiveEnrollment
-    ? `insert into public.enrollments (user_id, course_id) values (${sqlLiteral(FIXTURES.student.id)}::uuid, ${sqlLiteral(seed.id)}::uuid);`
-    : ''
   return `insert into public.courses (id, title, status, price_cents, access_duration_days)
 values (${sqlLiteral(seed.id)}::uuid, ${sqlLiteral(seed.title)}, 'draft', ${seed.priceCents}, ${days});
 insert into public.modules (course_id, title, position) values (${sqlLiteral(seed.id)}::uuid, ${sqlLiteral(seed.moduleTitle)}, 1);
 ${seed.lessons.map((lesson, index) => lessonSql(seed, lesson, index)).join('\n')}
 ${seed.status === 'published' ? `update public.courses set status = 'published' where id = ${sqlLiteral(seed.id)}::uuid;` : ''}
-${enrollment}`
+${enrollmentSql(seed)}`
 }
 
 // Remove (se existirem) e recria os cursos de fixture no estado inicial. Cursos criados

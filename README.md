@@ -148,6 +148,10 @@ Fluxos cobertos (`frontend/e2e/`):
   publicação; tutor edita conteúdo e publica, mas não altera preço nem duração; exclusão bloqueada
   em curso com vendas; conflito de edição se recupera após reler; aluno vê 404 e visitante anônimo
   é redirecionado ao login. Os cursos `E2E ...` são recriados a cada teste (`courseFixtures.ts`).
+- `student-area.spec.ts`: área do aluno em `/meus-cursos` — aluno abre o curso comprado, conclui uma
+  aula, comenta e vê o progresso mudar; curso com matrícula expirada aparece esmaecido na lista e
+  resulta em página não encontrada por URL direta. Progresso e comentários são zerados junto com
+  os cursos de fixture.
 
 Playwright inicia um dev server na porta 5199 automaticamente. Variáveis de env para E2E
 (definidas em `frontend/playwright.config.ts`):

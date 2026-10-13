@@ -32,7 +32,13 @@ houver dados de alunos.
    (árvore do curso, "meus cursos", lista de comentários) são RPCs
    `SECURITY DEFINER` com `search_path = ''`, que validam `auth.uid()` e
    `is_active` e retornam zero linhas, nunca erro, para quem não tem direito
-   (mesmo princípio de `get_playable_ref`).
+   (mesmo princípio de `get_playable_ref`). Entrada malformada (por exemplo,
+   cursor de paginação pela metade) é erro do cliente e levanta
+   `invalid_input`. Concluir e desmarcar aula seguem a mesma regra
+   (zero linhas sem direito). As escritas de comentário (comentar, responder,
+   excluir) levantam erros tipados (`unauthorized`, `forbidden`,
+   `invalid_input`, `rate_limited`), pois o cliente precisa distinguir a
+   causa.
 4. **Participação em comentários atrelada à matrícula válida.** Leem e
    escrevem apenas alunos com matrícula válida no curso e a equipe (`tutor`,
    `admin`, `superadmin`). Matrícula expirada perde a participação. Quem tem
@@ -42,7 +48,10 @@ houver dados de alunos.
    Até 2.000 caracteres. O autor exclui o próprio comentário; a equipe exclui
    qualquer um, e o registro guarda quem excluiu e quando. Comentário excluído
    com respostas permanece como "comentário removido". Sem edição, denúncia,
-   notificação ou tempo real nesta versão.
+   notificação ou tempo real nesta versão. A lista é paginada por raiz (20 por
+   página, cursor por `created_at, id`, mais recentes primeiro), com as
+   respostas carregadas junto da raiz; um comentário excluído sem respostas
+   deixa de aparecer, e uma resposta excluída some.
 6. **Limite de taxa dentro da RPC.** Cerca de 10 criações por minuto por
    aluno, calculadas a partir das próprias linhas (`created_at` no último
    minuto), sem tabela extra. A equipe é isenta. O erro é um código distinto

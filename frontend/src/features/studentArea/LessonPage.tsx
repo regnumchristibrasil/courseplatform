@@ -61,7 +61,7 @@ export function LessonPage() {
           <span aria-hidden="true">/</span>
           <span>{module.title}</span>
         </nav>
-        <LessonVideo key={lesson.id} lessonId={lesson.id} />
+        <LessonVideo key={`video-${lesson.id}`} lessonId={lesson.id} />
         <h1 className={styles.title}>{lesson.title}</h1>
         {duration ? <p className={styles.duration}>{duration}</p> : null}
         <div className={styles.pager}>
@@ -79,7 +79,7 @@ export function LessonPage() {
           ) : null}
         </div>
         {tree.isStaff ? null : <LessonProgressPanel tree={tree} lessonId={lesson.id} lessonState={lesson.state} />}
-        <LessonComments key={lesson.id} lessonId={lesson.id} />
+        <LessonComments key={`comments-${lesson.id}`} lessonId={lesson.id} />
       </div>
       <nav aria-label="Aulas do módulo" className={styles.side}>
         <h2 className={styles.sideTitle}>{module.title}</h2>

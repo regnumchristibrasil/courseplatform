@@ -104,11 +104,13 @@ A conclusão registrada é preservada, então desarquivar a aula a restaura.
 
 **Comentário**  
 Texto simples (até 2.000 caracteres, sem formatação) escrito em uma aula. Ordem: mais
-recentes primeiro. O autor pode excluir o próprio comentário; se ele tiver respostas, é
-exibido como "comentário removido". Não há edição, denúncia nem notificação por e-mail.
+recentes primeiro, 20 por página ("Carregar mais" busca a seguinte). O autor pode excluir o
+próprio comentário; se ele tiver respostas, é exibido como "comentário removido", e sem
+respostas deixa de aparecer. Não há edição, denúncia nem notificação por e-mail.
 
 **Resposta**  
-Comentário filho de outro comentário. Há um único nível: não se responde a uma resposta.
+Comentário filho de outro comentário, exibido sob a raiz. Há um único nível: não se responde
+a uma resposta. Uma resposta excluída deixa de aparecer.
 
 **Equipe**  
 Conjunto dos papéis `tutor`, `admin` e `superadmin`. Lê e escreve comentários em qualquer
@@ -140,7 +142,8 @@ tabela de auditoria própria.
 
 **Limite de comentários**  
 Cada aluno pode publicar até cerca de 10 comentários ou respostas por minuto. A equipe é
-isenta. Excedido o limite, o aluno vê "Aguarde um instante antes de comentar de novo".
+isenta. Comentários e respostas já excluídos continuam contando, então excluir e republicar
+não contorna o limite. Excedido o limite, o aluno vê "Aguarde um instante antes de comentar de novo".
 
 **Fora desta versão (área do aluno)**  
 Avaliação com nota, materiais complementares, capa do curso, descrição da aula, subtítulo do

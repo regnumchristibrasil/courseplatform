@@ -64,6 +64,17 @@ describe('LessonPage', () => {
     vi.mocked(setLessonCompleted).mockReset().mockResolvedValue(true)
   })
 
+  it('renders without React key warnings', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      renderPage('l2')
+      expect(await screen.findByRole('heading', { level: 1, name: 'JSX' })).toBeInTheDocument()
+      expect(errors).not.toHaveBeenCalled()
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
   it('shows a loading state first', () => {
     vi.mocked(fetchCourseTree).mockReturnValue(new Promise(() => {}))
     renderPage()
