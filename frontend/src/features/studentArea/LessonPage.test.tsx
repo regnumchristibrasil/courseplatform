@@ -11,7 +11,7 @@ import { LessonPage } from './LessonPage'
 import { fetchLessonVideo } from './lessonVideoApi'
 import { startLesson } from './startLessonApi'
 
-vi.mock('./commentsApi', () => ({ listLessonComments: vi.fn(), createLessonComment: vi.fn(), StudentAreaApiError: class extends Error {} }))
+vi.mock('./commentsApi', () => ({ listLessonComments: vi.fn(), createLessonComment: vi.fn(), deleteLessonComment: vi.fn(), StudentAreaApiError: class extends Error {} }))
 vi.mock('./completionApi', () => ({ setLessonCompleted: vi.fn() }))
 vi.mock('./courseTreeApi', () => ({ fetchCourseTree: vi.fn() }))
 vi.mock('./lessonVideoApi', () => ({ fetchLessonVideo: vi.fn() }))
@@ -59,7 +59,7 @@ describe('LessonPage', () => {
     vi.mocked(fetchLessonVideo)
       .mockReset()
       .mockResolvedValue({ playerKind: 'youtube', videoId: 'abc', expiresAt: null })
-    vi.mocked(listLessonComments).mockReset().mockResolvedValue({ comments: [], nextCursor: null })
+    vi.mocked(listLessonComments).mockReset().mockResolvedValue({ threads: [], nextCursor: null })
     vi.mocked(startLesson).mockReset().mockResolvedValue(true)
     vi.mocked(setLessonCompleted).mockReset().mockResolvedValue(true)
   })

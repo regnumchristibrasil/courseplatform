@@ -6,10 +6,26 @@ import { commentErrorMessage } from './commentErrors'
 import styles from './LessonComments.module.css'
 import { usePublishLessonComment } from './useLessonComments'
 
-export function CommentForm({ lessonId }: { readonly lessonId: string }) {
+export interface CommentFormProps {
+  readonly lessonId: string
+  readonly parentId?: string
+  readonly label?: string
+  readonly submitLabel?: string
+  readonly onPublished?: () => void
+  readonly onCancel?: () => void
+}
+
+export function CommentForm({
+  lessonId,
+  parentId,
+  label = 'Escreva um comentário',
+  submitLabel = 'Publicar',
+  onPublished,
+  onCancel,
+}: CommentFormProps) {
   const fieldId = useId()
   const [text, setText] = useState('')
-  const publish = usePublishLessonComment(lessonId)
+  const publish = usePublishLessonComment(lessonId, parentId ?? null)
   const canSubmit = text.trim().length > 0 && !publish.isPending
 
   function onChange(value: string) {
@@ -20,13 +36,18 @@ export function CommentForm({ lessonId }: { readonly lessonId: string }) {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSubmit) return
-    publish.mutate(text, { onSuccess: () => setText('') })
+    publish.mutate(text, {
+      onSuccess: () => {
+        setText('')
+        onPublished?.()
+      },
+    })
   }
 
   return (
     <form className={styles.form} onSubmit={onSubmit}>
       <label htmlFor={fieldId} className={styles.label}>
-        Escreva um comentário
+        {label}
       </label>
       <textarea
         id={fieldId}
@@ -39,11 +60,18 @@ export function CommentForm({ lessonId }: { readonly lessonId: string }) {
       />
       <div className={styles.formFooter}>
         <span className={styles.counter}>{`${text.length}/${COMMENT_MAX_LENGTH}`}</span>
-        <Button type="submit" disabled={!canSubmit} isLoading={publish.isPending}>
-          Publicar
-        </Button>
+        <div className={styles.actions}>
+          {onCancel ? (
+            <Button variant="secondary" onClick={onCancel} disabled={publish.isPending}>
+              Cancelar
+            </Button>
+          ) : null}
+          <Button type="submit" disabled={!canSubmit} isLoading={publish.isPending}>
+            {submitLabel}
+          </Button>
+        </div>
       </div>
-      {publish.isError ? <Alert variant="error">{commentErrorMessage(publish.error)}</Alert> : null}
+      {publish.isError ? <Alert variant="error">{commentErrorMessage(publish.error, parentId !== undefined)}</Alert> : null}
     </form>
   )
 }

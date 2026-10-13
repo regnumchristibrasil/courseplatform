@@ -1,27 +1,10 @@
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Spinner } from '../../components/ui/Spinner'
-import type { LessonComment } from '../../contracts/studentArea'
 import { CommentForm } from './CommentForm'
+import { CommentThreadItem } from './CommentItem'
 import styles from './LessonComments.module.css'
 import { useLessonComments } from './useLessonComments'
-
-const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-
-function CommentItem({ comment }: { readonly comment: LessonComment }) {
-  return (
-    <li className={styles.item}>
-      <div className={styles.meta}>
-        <strong className={styles.author}>{comment.authorFirstName}</strong>
-        {comment.isStaffAuthor ? <span className={styles.badge}>Equipe</span> : null}
-        <time dateTime={comment.createdAt} className={styles.time}>
-          {dateFormat.format(new Date(comment.createdAt))}
-        </time>
-      </div>
-      <p className={styles.body}>{comment.body}</p>
-    </li>
-  )
-}
 
 export interface LessonCommentsProps {
   readonly lessonId: string
@@ -29,7 +12,7 @@ export interface LessonCommentsProps {
 
 export function LessonComments({ lessonId }: LessonCommentsProps) {
   const list = useLessonComments(lessonId)
-  const comments = list.data?.pages.flatMap((page) => page.comments) ?? []
+  const threads = list.data?.pages.flatMap((page) => page.threads) ?? []
 
   return (
     <section className={styles.section} aria-labelledby="lesson-comments-title">
@@ -47,12 +30,12 @@ export function LessonComments({ lessonId }: LessonCommentsProps) {
         </Alert>
       ) : null}
 
-      {list.isSuccess && comments.length === 0 ? <p className={styles.empty}>Nenhum comentário ainda. Seja o primeiro a comentar.</p> : null}
+      {list.isSuccess && threads.length === 0 ? <p className={styles.empty}>Nenhum comentário ainda. Seja o primeiro a comentar.</p> : null}
 
-      {comments.length > 0 ? (
+      {threads.length > 0 ? (
         <ul className={styles.list}>
-          {comments.map((comment) => (
-            <CommentItem key={comment.id} comment={comment} />
+          {threads.map((thread) => (
+            <CommentThreadItem key={thread.root.id} lessonId={lessonId} thread={thread} />
           ))}
         </ul>
       ) : null}

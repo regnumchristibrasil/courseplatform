@@ -82,17 +82,30 @@ export const COMMENT_PAGE_SIZE = 20;
 
 // Mirrors the rows of app.list_lesson_comments() / app.create_lesson_comment().
 // The author is projected as first name plus a staff flag; no e-mail or user id.
+// parentId is null for a root comment; replies are one level deep. A removed
+// root (isDeleted) arrives with an empty author and body and is only listed
+// while it still has live replies.
 export interface LessonComment {
   readonly id: string;
+  readonly parentId: string | null;
   readonly authorFirstName: string;
   readonly isStaffAuthor: boolean;
   readonly body: string;
   readonly createdAt: string;
   readonly isOwn: boolean;
+  readonly isDeleted: boolean;
+  readonly canDelete: boolean;
 }
 
-// Keyset cursor (created_at, id), newest first. The server returns up to
-// COMMENT_PAGE_SIZE + 1 rows; the extra row only signals that more exist.
+// A root comment with its live replies, oldest reply first.
+export interface CommentThread {
+  readonly root: LessonComment;
+  readonly replies: readonly LessonComment[];
+}
+
+// Keyset cursor (created_at, id) over root comments, newest first. The server
+// returns up to COMMENT_PAGE_SIZE + 1 roots; the extra root only signals that
+// more exist and comes without replies.
 export interface CommentCursor {
   readonly createdAt: string;
   readonly id: string;

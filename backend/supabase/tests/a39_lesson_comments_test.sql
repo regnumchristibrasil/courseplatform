@@ -45,14 +45,14 @@ INSERT INTO public.enrollments (user_id, course_id, status, granted_at, expires_
 
 -- Shape ---------------------------------------------------------------
 SELECT has_function('app', 'list_lesson_comments', ARRAY['uuid', 'timestamp with time zone', 'uuid'], 'app.list_lesson_comments exists');
-SELECT has_function('app', 'create_lesson_comment', ARRAY['uuid', 'text'], 'app.create_lesson_comment exists');
+SELECT has_function('app', 'create_lesson_comment', ARRAY['uuid', 'text', 'uuid'], 'app.create_lesson_comment exists');
 SELECT ok((SELECT bool_and(prosecdef) FROM pg_proc WHERE proname IN ('list_lesson_comments', 'create_lesson_comment') AND pronamespace = 'app'::regnamespace), 'both RPCs are SECURITY DEFINER');
 SELECT ok((SELECT bool_and(proconfig @> ARRAY['search_path=""']) FROM pg_proc WHERE proname IN ('list_lesson_comments', 'create_lesson_comment') AND pronamespace = 'app'::regnamespace), 'both RPCs pin search_path to empty');
-SELECT ok(has_function_privilege('authenticated', 'app.create_lesson_comment(uuid, text)', 'EXECUTE')
+SELECT ok(has_function_privilege('authenticated', 'app.create_lesson_comment(uuid, text, uuid)', 'EXECUTE')
       AND has_function_privilege('authenticated', 'app.list_lesson_comments(uuid, timestamptz, uuid)', 'EXECUTE'), 'authenticated can EXECUTE both');
-SELECT ok(NOT has_function_privilege('anon', 'app.create_lesson_comment(uuid, text)', 'EXECUTE')
+SELECT ok(NOT has_function_privilege('anon', 'app.create_lesson_comment(uuid, text, uuid)', 'EXECUTE')
       AND NOT has_function_privilege('anon', 'app.list_lesson_comments(uuid, timestamptz, uuid)', 'EXECUTE'), 'anon cannot EXECUTE');
-SELECT ok(NOT has_function_privilege('public', 'app.create_lesson_comment(uuid, text)', 'EXECUTE')
+SELECT ok(NOT has_function_privilege('public', 'app.create_lesson_comment(uuid, text, uuid)', 'EXECUTE')
       AND NOT has_function_privilege('public', 'app.list_lesson_comments(uuid, timestamptz, uuid)', 'EXECUTE'), 'PUBLIC cannot EXECUTE');
 SELECT ok((SELECT relrowsecurity FROM pg_class WHERE oid = 'public.lesson_comments'::regclass), 'lesson_comments has RLS enabled');
 SELECT is((SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'lesson_comments'), 0::bigint, 'lesson_comments has no policies');
@@ -61,8 +61,8 @@ SELECT ok(NOT has_table_privilege('authenticated', 'public.lesson_comments', 'SE
       AND NOT has_table_privilege('anon', 'public.lesson_comments', 'SELECT'), 'clients have no table grants');
 SELECT is(
   (SELECT proargnames FROM pg_proc WHERE oid = 'app.list_lesson_comments(uuid, timestamptz, uuid)'::regprocedure)::text,
-  '{p_lesson_id,p_cursor_created_at,p_cursor_id,id,author_first_name,is_staff_author,body,created_at,is_own}',
-  'list projects only id, first name, staff flag, body, created_at, is_own (no e-mail, no user id)'
+  '{p_lesson_id,p_cursor_created_at,p_cursor_id,id,parent_id,author_first_name,is_staff_author,body,created_at,is_own,is_deleted,can_delete}',
+  'list projects no e-mail and no user id (replies/delete flags added in A40)'
 );
 
 -- Criar: aluno com matricula valida -----------------------------------------

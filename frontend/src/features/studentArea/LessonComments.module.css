@@ -105,3 +105,42 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.removed {
+  margin: 4px 0 0;
+  color: var(--color-ink);
+  font-style: italic;
+}
+
+.replies {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0 0 0 16px;
+  border-left: 2px solid var(--color-line);
+  list-style: none;
+}
+
+.reply {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.replyForm {
+  margin-top: 8px;
+}

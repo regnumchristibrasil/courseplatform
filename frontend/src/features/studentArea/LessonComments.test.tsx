@@ -1,26 +1,37 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMMENT_MAX_LENGTH, type LessonComment } from '../../contracts/studentArea'
+import { COMMENT_MAX_LENGTH, type CommentThread, type LessonComment } from '../../contracts/studentArea'
 import { renderWithProviders } from '../../test/renderWithProviders'
-import { createLessonComment, listLessonComments, StudentAreaApiError } from './commentsApi'
+import { createLessonComment, deleteLessonComment, listLessonComments, StudentAreaApiError } from './commentsApi'
 import { LessonComments } from './LessonComments'
 
 vi.mock('./commentsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./commentsApi')>()
-  return { ...actual, listLessonComments: vi.fn(), createLessonComment: vi.fn() }
+  return { ...actual, listLessonComments: vi.fn(), createLessonComment: vi.fn(), deleteLessonComment: vi.fn() }
 })
 
 function comment(n: number, overrides: Partial<LessonComment> = {}): LessonComment {
   return {
     id: `c${n}`,
+    parentId: null,
     authorFirstName: `Autor${n}`,
     isStaffAuthor: false,
     body: `Texto ${n}`,
     createdAt: `2026-01-01T10:00:0${n}Z`,
     isOwn: false,
+    isDeleted: false,
+    canDelete: false,
     ...overrides,
   }
+}
+
+function thread(root: LessonComment, ...replies: LessonComment[]): CommentThread {
+  return { root, replies }
+}
+
+function reply(n: number, parent: number, overrides: Partial<LessonComment> = {}): LessonComment {
+  return comment(n, { parentId: `c${parent}`, ...overrides })
 }
 
 function renderComments() {
@@ -29,8 +40,9 @@ function renderComments() {
 
 describe('LessonComments', () => {
   beforeEach(() => {
-    vi.mocked(listLessonComments).mockReset().mockResolvedValue({ comments: [], nextCursor: null })
+    vi.mocked(listLessonComments).mockReset().mockResolvedValue({ threads: [], nextCursor: null })
     vi.mocked(createLessonComment).mockReset().mockResolvedValue(comment(9, { isOwn: true }))
+    vi.mocked(deleteLessonComment).mockReset().mockResolvedValue(undefined)
   })
 
   it('shows a loading state first', () => {
@@ -46,7 +58,7 @@ describe('LessonComments', () => {
 
   it('lists comments with first name and a Equipe badge only for staff', async () => {
     vi.mocked(listLessonComments).mockResolvedValue({
-      comments: [comment(2, { isStaffAuthor: true, authorFirstName: 'Tutor' }), comment(1)],
+      threads: [thread(comment(2, { isStaffAuthor: true, authorFirstName: 'Tutor' })), thread(comment(1))],
       nextCursor: null,
     })
     renderComments()
@@ -61,7 +73,7 @@ describe('LessonComments', () => {
 
   it('renders the body as plain text, never as markup', async () => {
     vi.mocked(listLessonComments).mockResolvedValue({
-      comments: [comment(1, { body: '<img src=x onerror=alert(1)> <b>negrito</b>' })],
+      threads: [thread(comment(1, { body: '<img src=x onerror=alert(1)> <b>negrito</b>' }))],
       nextCursor: null,
     })
     const { container } = renderComments()
@@ -79,8 +91,8 @@ describe('LessonComments', () => {
   it('appends the next page using the cursor when "Carregar mais" is clicked', async () => {
     const cursor = { createdAt: '2026-01-01T10:00:02Z', id: 'c2' }
     vi.mocked(listLessonComments)
-      .mockResolvedValueOnce({ comments: [comment(2)], nextCursor: cursor })
-      .mockResolvedValueOnce({ comments: [comment(1)], nextCursor: null })
+      .mockResolvedValueOnce({ threads: [thread(comment(2))], nextCursor: cursor })
+      .mockResolvedValueOnce({ threads: [thread(comment(1))], nextCursor: null })
     renderComments()
     await userEvent.click(await screen.findByRole('button', { name: /carregar mais/i }))
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(2))
@@ -89,7 +101,7 @@ describe('LessonComments', () => {
   })
 
   it('shows an error with retry when the list fails', async () => {
-    vi.mocked(listLessonComments).mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ comments: [], nextCursor: null })
+    vi.mocked(listLessonComments).mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ threads: [], nextCursor: null })
     renderComments()
     expect(await screen.findByText(/não foi possível carregar os comentários/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /tentar novamente/i }))
@@ -120,7 +132,7 @@ describe('LessonComments', () => {
       renderComments()
       await userEvent.type(await screen.findByLabelText(/escreva um comentário/i), 'Otima aula')
       await userEvent.click(screen.getByRole('button', { name: /publicar/i }))
-      await waitFor(() => expect(createLessonComment).toHaveBeenCalledWith(expect.anything(), 'l1', 'Otima aula'))
+      await waitFor(() => expect(createLessonComment).toHaveBeenCalledWith(expect.anything(), 'l1', 'Otima aula', null))
       await waitFor(() => expect(screen.getByLabelText(/escreva um comentário/i)).toHaveValue(''))
       await waitFor(() => expect(listLessonComments).toHaveBeenCalledTimes(2))
     })
@@ -165,6 +177,134 @@ describe('LessonComments', () => {
       await screen.findByRole('alert')
       await userEvent.type(field, '!')
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('replies', () => {
+    it('shows replies nested under their root, in order', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({
+        threads: [thread(comment(1), reply(2, 1), reply(3, 1, { isStaffAuthor: true, authorFirstName: 'Tutor' }))],
+        nextCursor: null,
+      })
+      renderComments()
+      const [rootItem] = await screen.findAllByRole('listitem')
+      const replies = within(rootItem).getAllByRole('listitem')
+      expect(replies).toHaveLength(2)
+      expect(within(replies[0]).getByText('Texto 2')).toBeInTheDocument()
+      expect(within(replies[1]).getByText('Equipe')).toBeInTheDocument()
+    })
+
+    it('offers "Responder" on roots only, never on replies', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1), reply(2, 1))], nextCursor: null })
+      renderComments()
+      await screen.findByText('Texto 2')
+      expect(screen.getAllByRole('button', { name: /^responder/i })).toHaveLength(1)
+    })
+
+    it('opens an inline reply form, publishes with the parent id, closes and reloads', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1))], nextCursor: null })
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^responder/i }))
+      const field = screen.getByLabelText(/escreva uma resposta a autor1/i)
+      await userEvent.type(field, 'concordo')
+      await userEvent.click(screen.getByRole('button', { name: /enviar resposta/i }))
+      await waitFor(() => expect(createLessonComment).toHaveBeenCalledWith(expect.anything(), 'l1', 'concordo', 'c1'))
+      await waitFor(() => expect(screen.queryByLabelText(/escreva uma resposta/i)).not.toBeInTheDocument())
+      await waitFor(() => expect(listLessonComments).toHaveBeenCalledTimes(2))
+    })
+
+    it('cancels the reply form without publishing', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1))], nextCursor: null })
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^responder/i }))
+      await userEvent.click(screen.getByRole('button', { name: /cancelar/i }))
+      expect(screen.queryByLabelText(/escreva uma resposta/i)).not.toBeInTheDocument()
+      expect(createLessonComment).not.toHaveBeenCalled()
+    })
+
+    it('explains invalid_input on a reply without the 2.000 characters wording alone', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1))], nextCursor: null })
+      vi.mocked(createLessonComment).mockRejectedValue(new StudentAreaApiError('invalid_input', 'invalid_input'))
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^responder/i }))
+      await userEvent.type(screen.getByLabelText(/escreva uma resposta/i), 'oi')
+      await userEvent.click(screen.getByRole('button', { name: /enviar resposta/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/o comentário ainda existe/i)
+    })
+
+    it('shows the rate limit message inside the reply form and keeps the text', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1))], nextCursor: null })
+      vi.mocked(createLessonComment).mockRejectedValue(new StudentAreaApiError('rate_limited', 'rate_limited'))
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^responder/i }))
+      await userEvent.type(screen.getByLabelText(/escreva uma resposta/i), 'oi')
+      await userEvent.click(screen.getByRole('button', { name: /enviar resposta/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/aguarde um instante antes de comentar de novo/i)
+      expect(screen.getByLabelText(/escreva uma resposta/i)).toHaveValue('oi')
+    })
+  })
+
+  describe('removed comments', () => {
+    it('shows "Comentário removido" for a removed root, keeps its replies and offers no actions on it', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({
+        threads: [thread(comment(1, { isDeleted: true, authorFirstName: '', body: '' }), reply(2, 1))],
+        nextCursor: null,
+      })
+      renderComments()
+      const [rootItem] = await screen.findAllByRole('listitem')
+      expect(within(rootItem).getByText(/comentário removido/i)).toBeInTheDocument()
+      expect(within(rootItem).getByText('Texto 2')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^responder/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /excluir/i })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('deleting', () => {
+    it('shows "Excluir" only where the server allows it', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({
+        threads: [thread(comment(1, { canDelete: true }), reply(2, 1), reply(3, 1, { canDelete: true })), thread(comment(4))],
+        nextCursor: null,
+      })
+      renderComments()
+      await screen.findByText('Texto 2')
+      expect(screen.getAllByRole('button', { name: /^excluir/i })).toHaveLength(2)
+    })
+
+    it('asks for confirmation, deletes by id and reloads the list', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1, { canDelete: true, isOwn: true }))], nextCursor: null })
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^excluir/i }))
+      expect(deleteLessonComment).not.toHaveBeenCalled()
+      await userEvent.click(screen.getByRole('button', { name: /confirmar exclusão/i }))
+      await waitFor(() => expect(deleteLessonComment).toHaveBeenCalledWith(expect.anything(), 'c1'))
+      await waitFor(() => expect(listLessonComments).toHaveBeenCalledTimes(2))
+    })
+
+    it('does not delete when the confirmation is cancelled', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1, { canDelete: true }))], nextCursor: null })
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^excluir/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^cancelar/i }))
+      expect(deleteLessonComment).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: /^excluir/i })).toBeInTheDocument()
+    })
+
+    it('shows an error when the deletion fails', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1, { canDelete: true }))], nextCursor: null })
+      vi.mocked(deleteLessonComment).mockRejectedValue(new StudentAreaApiError('forbidden', 'forbidden'))
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^excluir/i }))
+      await userEvent.click(screen.getByRole('button', { name: /confirmar exclusão/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/você não pode excluir este comentário/i)
+    })
+
+    it('shows a generic message for unexpected deletion failures', async () => {
+      vi.mocked(listLessonComments).mockResolvedValue({ threads: [thread(comment(1, { canDelete: true }))], nextCursor: null })
+      vi.mocked(deleteLessonComment).mockRejectedValue(new Error('boom'))
+      renderComments()
+      await userEvent.click(await screen.findByRole('button', { name: /^excluir/i }))
+      await userEvent.click(screen.getByRole('button', { name: /confirmar exclusão/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível excluir o comentário/i)
     })
   })
 })
