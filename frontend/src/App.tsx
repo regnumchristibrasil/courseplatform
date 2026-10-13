@@ -5,6 +5,7 @@ import { Layout } from './components/Layout'
 import { Spinner } from './components/ui/Spinner'
 import { PostHogProvider } from './features/analytics/PostHogProvider'
 import { AuthProvider } from './features/auth/AuthProvider'
+import { ProtectedRoute } from './features/auth/ProtectedRoute'
 import { isCourseStaffRole } from './features/authz/coursePermissions'
 import { RoleRoute } from './features/authz/RoleRoute'
 import { queryClient } from './lib/queryClient'
@@ -16,6 +17,7 @@ import { SignupPage } from './pages/SignupPage'
 const AdminCourseCreatePage = lazy(() => import('./features/admin/courses/AdminCourseCreatePage'))
 const AdminCourseDetailPage = lazy(() => import('./features/admin/courses/AdminCourseDetailPage'))
 const AdminCoursesPage = lazy(() => import('./features/admin/courses/AdminCoursesPage'))
+const MyCoursesPage = lazy(() => import('./features/studentArea/MyCoursesPage'))
 const AdminUsersPage = lazy(() => import('./features/admin/users/AdminUsersPage'))
 
 // Composition root only — no business logic lives here. Each provider and
@@ -34,6 +36,16 @@ export function App() {
                 <Route index element={<CatalogPage />} />
                 <Route path="login" element={<LoginPage />} />
                 <Route path="signup" element={<SignupPage />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route
+                    path="meus-cursos"
+                    element={
+                      <Suspense fallback={<Spinner label="Carregando página..." />}>
+                        <MyCoursesPage />
+                      </Suspense>
+                    }
+                  />
+                </Route>
                 <Route element={<RoleRoute />}>
                   <Route path="admin" element={<Navigate to="/admin/users" replace />} />
                   <Route

@@ -1,10 +1,14 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AnalyticsContext, type AnalyticsContextValue } from '../features/analytics/AnalyticsContext'
 import { AuthContext, type AuthContextValue } from '../features/auth/AuthContext'
+import { fetchCurrentAccess } from '../features/authz/currentAccessApi'
 import { LoginPage } from './LoginPage'
+
+vi.mock('../lib/supabaseClient', () => ({ supabase: {} }))
+vi.mock('../features/authz/currentAccessApi', () => ({ fetchCurrentAccess: vi.fn() }))
 
 function buildAuthValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
@@ -45,6 +49,7 @@ function renderLogin({
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<p>Home page</p>} />
             <Route path="/my-courses" element={<p>My courses page</p>} />
+            <Route path="/meus-cursos" element={<p>Meus cursos page</p>} />
             <Route path="/signup" element={<p>Signup page</p>} />
           </Routes>
         </MemoryRouter>
@@ -54,6 +59,11 @@ function renderLogin({
 }
 
 describe('LoginPage', () => {
+  beforeEach(() => {
+    vi.mocked(fetchCurrentAccess).mockReset()
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'admin', isActive: true })
+  })
+
   it('renders email and password fields plus a submit button', () => {
     renderLogin()
 
@@ -98,6 +108,18 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Home page')).toBeInTheDocument()
     expect(authValue.signIn).toHaveBeenCalledWith('user@example.com', 'secret123')
     expect(capture).toHaveBeenCalledWith('login_completed')
+  })
+
+  it('sends a student to /meus-cursos after login when no destination was requested', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.type(screen.getByLabelText(/e-mail/i), 'user@example.com')
+    await user.type(screen.getByLabelText(/senha/i), 'secret123')
+    await user.click(screen.getByRole('button', { name: /entrar/i }))
+
+    expect(await screen.findByText('Meus cursos page')).toBeInTheDocument()
   })
 
   it('redirects back to the originally requested page after login', async () => {

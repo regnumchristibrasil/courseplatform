@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchCurrentAccess } from './features/authz/currentAccessApi'
 import { getStaffCourse, listStaffCourses } from './features/admin/courses/api'
 import { listAdminUsers } from './features/admin/users/api'
+import { fetchMyCourses } from './features/studentArea/myCoursesApi'
 import { queryClient } from './lib/queryClient'
 import { App } from './App'
 
@@ -15,6 +16,7 @@ vi.mock('./features/auth/AuthProvider', async () => {
   return { AuthProvider: ({ children }: { children: ReactNode }) => <Ctx.Provider value={build()}>{children}</Ctx.Provider> }
 })
 vi.mock('./features/authz/currentAccessApi', () => ({ fetchCurrentAccess: vi.fn() }))
+vi.mock('./features/studentArea/myCoursesApi', () => ({ fetchMyCourses: vi.fn() }))
 vi.mock('./features/admin/courses/api', async (orig) => ({
   ...(await orig<typeof import('./features/admin/courses/api')>()),
   getStaffCourse: vi.fn(),
@@ -34,6 +36,16 @@ beforeEach(() => {
   queryClient.clear() // the mocked client is a singleton: drop cached roles/courses between tests
   vi.mocked(listAdminUsers).mockResolvedValue({ users: [], total: 0 })
   vi.mocked(listStaffCourses).mockResolvedValue([])
+})
+
+describe('App student area routes', () => {
+  it('renders Meus cursos at /meus-cursos for an authenticated user', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    vi.mocked(fetchMyCourses).mockResolvedValue([])
+    window.history.pushState({}, '', '/meus-cursos')
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Meus cursos', level: 1 })).toBeInTheDocument()
+  })
 })
 
 describe('App admin routes', () => {

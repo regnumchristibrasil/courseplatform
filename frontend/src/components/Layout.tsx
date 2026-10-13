@@ -28,6 +28,7 @@ export function Layout() {
           </NavItem>
           {user ? (
             <>
+              <NavItem to="/meus-cursos">Meus cursos</NavItem>
               <AdminNavLink />
               <span className={styles.userEmail}>{user.email}</span>
               <Button variant="secondary" onClick={handleSignOut}>

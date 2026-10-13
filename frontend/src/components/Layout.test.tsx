@@ -33,6 +33,7 @@ function renderLayout(authValue: AuthContextValue, initialPath = '/') {
             <Route element={<Layout />}>
               <Route path="/" element={<p>Nested route content</p>} />
               <Route path="/login" element={<p>Login content</p>} />
+              <Route path="/meus-cursos" element={<p>Meus cursos content</p>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -102,6 +103,27 @@ describe('Layout', () => {
     it('marks the catalog as active on the home page', () => {
       renderLayout(buildAuthValue(), '/')
       expect(screen.getByRole('link', { name: 'Catálogo' })).toHaveAttribute('aria-current', 'page')
+    })
+  })
+
+  describe('student area link', () => {
+    it('shows Meus cursos for an authenticated user', () => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+      const authUser = { id: 'user-1', email: 'user@example.com' } as unknown as User
+      renderLayout(buildAuthValue({ session: { user: authUser } as never, user: authUser }))
+      expect(screen.getByRole('link', { name: 'Meus cursos' })).toHaveAttribute('href', '/meus-cursos')
+    })
+
+    it('marks Meus cursos as the active item on its route', () => {
+      vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+      const authUser = { id: 'user-1', email: 'user@example.com' } as unknown as User
+      renderLayout(buildAuthValue({ session: { user: authUser } as never, user: authUser }), '/meus-cursos')
+      expect(screen.getByRole('link', { name: 'Meus cursos' })).toHaveAttribute('aria-current', 'page')
+    })
+
+    it('hides Meus cursos when unauthenticated', () => {
+      renderLayout(buildAuthValue())
+      expect(screen.queryByRole('link', { name: 'Meus cursos' })).not.toBeInTheDocument()
     })
   })
 

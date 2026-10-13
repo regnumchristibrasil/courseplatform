@@ -1,0 +1,114 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.card[data-expired='true'] {
+  opacity: 0.7;
+}
+
+.cover {
+  aspect-ratio: 16 / 9;
+  background: var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.expiredLabel {
+  color: var(--color-brand-strong);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--color-brand);
+}
+
+.percent {
+  min-width: 3ch;
+  font-size: 0.8125rem;
+  color: var(--color-ink);
+  text-align: right;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--color-brand);
+  border-radius: 4px;
+  background: var(--color-brand);
+  color: var(--color-surface);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.action:hover {
+  background: var(--color-brand-strong);
+}
+
+.actionSecondary {
+  composes: action;
+  background: var(--color-surface);
+  color: var(--color-brand);
+}
+
+.actionSecondary:hover {
+  background: var(--color-surface-muted);
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

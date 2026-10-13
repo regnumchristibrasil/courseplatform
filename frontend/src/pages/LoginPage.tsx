@@ -5,16 +5,10 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { useAnalytics } from '../features/analytics/useAnalytics'
+import { resolvePostLoginDestination } from '../features/auth/postLoginDestination'
 import { useAuth } from '../features/auth/useAuth'
+import { supabase } from '../lib/supabaseClient'
 import { isValidEmail } from '../lib/validators'
-
-// Só caminhos locais (um "/" não seguido de "/" ou "\\"): evita open redirect.
-const LOCAL_PATH = /^\/(?![/\\])/
-const DEFAULT_DESTINATION = '/'
-
-function safeDestination(pathname: string | undefined): string {
-  return pathname !== undefined && LOCAL_PATH.test(pathname) ? pathname : DEFAULT_DESTINATION
-}
 
 interface FieldErrors {
   readonly email?: string
@@ -69,7 +63,7 @@ export function LoginPage() {
 
     capture('login_completed')
     const state = location.state as RedirectLocationState | null
-    navigate(safeDestination(state?.from?.pathname), { replace: true })
+    navigate(await resolvePostLoginDestination(supabase, state?.from?.pathname), { replace: true })
   }
 
   return (
