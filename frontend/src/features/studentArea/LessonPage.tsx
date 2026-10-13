@@ -7,6 +7,7 @@ import { lessonRoute, myCourseRoute } from '../../contracts/studentArea'
 import { NotFoundPage } from '../../pages/NotFoundPage'
 import { formatDuration } from './formatDuration'
 import { findLessonContext } from './lessonContext'
+import { LessonProgressPanel } from './LessonProgressPanel'
 import { LessonStateIcon } from './LessonStateIcon'
 import { LessonVideo } from './LessonVideo'
 import styles from './LessonPage.module.css'
@@ -76,6 +77,7 @@ export function LessonPage() {
             </Link>
           ) : null}
         </div>
+        {tree.isStaff ? null : <LessonProgressPanel tree={tree} lessonId={lesson.id} lessonState={lesson.state} />}
       </div>
       <nav aria-label="Aulas do módulo" className={styles.side}>
         <h2 className={styles.sideTitle}>{module.title}</h2>

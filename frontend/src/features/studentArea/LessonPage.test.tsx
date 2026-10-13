@@ -1,13 +1,16 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CourseTree } from '../../contracts/studentArea'
 import { renderWithProviders } from '../../test/renderWithProviders'
+import { setLessonCompleted } from './completionApi'
 import { fetchCourseTree } from './courseTreeApi'
 import { LessonPage } from './LessonPage'
 import { fetchLessonVideo } from './lessonVideoApi'
 import { startLesson } from './startLessonApi'
 
+vi.mock('./completionApi', () => ({ setLessonCompleted: vi.fn() }))
 vi.mock('./courseTreeApi', () => ({ fetchCourseTree: vi.fn() }))
 vi.mock('./lessonVideoApi', () => ({ fetchLessonVideo: vi.fn() }))
 vi.mock('./startLessonApi', () => ({ startLesson: vi.fn() }))
@@ -55,6 +58,7 @@ describe('LessonPage', () => {
       .mockReset()
       .mockResolvedValue({ playerKind: 'youtube', videoId: 'abc', expiresAt: null })
     vi.mocked(startLesson).mockReset().mockResolvedValue(true)
+    vi.mocked(setLessonCompleted).mockReset().mockResolvedValue(true)
   })
 
   it('shows a loading state first', () => {
@@ -144,5 +148,59 @@ describe('LessonPage', () => {
     renderPage('ghost')
     expect(await screen.findByRole('heading', { name: /página não encontrada/i })).toBeInTheDocument()
     expect(startLesson).not.toHaveBeenCalled()
+  })
+
+  describe('progress panel', () => {
+    it('shows course progress and an unpressed mark-as-completed button', async () => {
+      vi.mocked(fetchCourseTree).mockResolvedValue(tree({ completedLessons: 1, progressPercent: 33 }))
+      renderPage('l2')
+      const panel = await screen.findByRole('region', { name: /progresso/i })
+      expect(within(panel).getByRole('progressbar', { name: /progresso do curso/i })).toHaveAttribute('aria-valuenow', '33')
+      expect(within(panel).getByText('33%')).toBeInTheDocument()
+      expect(within(panel).getByText('1 de 3 aulas concluídas')).toBeInTheDocument()
+      expect(within(panel).getByRole('button', { name: /marcar como concluíd/i })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('completes the lesson and refreshes the tree and my courses', async () => {
+      const user = userEvent.setup()
+      const { invalidate } = renderPage('l2')
+      await user.click(await screen.findByRole('button', { name: /marcar como concluíd/i }))
+      await waitFor(() => expect(setLessonCompleted).toHaveBeenCalledWith(expect.anything(), 'l2', true))
+      const keys = invalidate.mock.calls.map((call) => (call[0] as { queryKey: readonly string[] }).queryKey.join('/'))
+      expect(keys).toEqual(expect.arrayContaining(['student/course-tree', 'student/my-courses']))
+    })
+
+    it('shows the completed state with a toggle that unmarks it', async () => {
+      const user = userEvent.setup()
+      renderPage('l1')
+      const button = await screen.findByRole('button', { name: /concluíd/i })
+      expect(button).toHaveAttribute('aria-pressed', 'true')
+      await user.click(button)
+      await waitFor(() => expect(setLessonCompleted).toHaveBeenCalledWith(expect.anything(), 'l1', false))
+    })
+
+    it('shows an error when the change fails or has no effect', async () => {
+      const user = userEvent.setup()
+      vi.mocked(setLessonCompleted).mockResolvedValue(false)
+      renderPage('l2')
+      await user.click(await screen.findByRole('button', { name: /marcar como concluíd/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível atualizar/i)
+    })
+
+    it('shows an error when the request throws', async () => {
+      const user = userEvent.setup()
+      vi.mocked(setLessonCompleted).mockRejectedValue(new Error('boom'))
+      renderPage('l2')
+      await user.click(await screen.findByRole('button', { name: /marcar como concluíd/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível atualizar/i)
+    })
+
+    it('is hidden for staff', async () => {
+      vi.mocked(fetchCourseTree).mockResolvedValue(tree({ isStaff: true }))
+      renderPage('l2')
+      await screen.findByRole('heading', { level: 1, name: 'JSX' })
+      expect(screen.queryByRole('region', { name: /progresso/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /concluíd/i })).not.toBeInTheDocument()
+    })
   })
 })
