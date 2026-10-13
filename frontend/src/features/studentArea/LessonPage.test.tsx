@@ -4,12 +4,14 @@ import { Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CourseTree } from '../../contracts/studentArea'
 import { renderWithProviders } from '../../test/renderWithProviders'
+import { listLessonComments } from './commentsApi'
 import { setLessonCompleted } from './completionApi'
 import { fetchCourseTree } from './courseTreeApi'
 import { LessonPage } from './LessonPage'
 import { fetchLessonVideo } from './lessonVideoApi'
 import { startLesson } from './startLessonApi'
 
+vi.mock('./commentsApi', () => ({ listLessonComments: vi.fn(), createLessonComment: vi.fn(), StudentAreaApiError: class extends Error {} }))
 vi.mock('./completionApi', () => ({ setLessonCompleted: vi.fn() }))
 vi.mock('./courseTreeApi', () => ({ fetchCourseTree: vi.fn() }))
 vi.mock('./lessonVideoApi', () => ({ fetchLessonVideo: vi.fn() }))
@@ -57,6 +59,7 @@ describe('LessonPage', () => {
     vi.mocked(fetchLessonVideo)
       .mockReset()
       .mockResolvedValue({ playerKind: 'youtube', videoId: 'abc', expiresAt: null })
+    vi.mocked(listLessonComments).mockReset().mockResolvedValue({ comments: [], nextCursor: null })
     vi.mocked(startLesson).mockReset().mockResolvedValue(true)
     vi.mocked(setLessonCompleted).mockReset().mockResolvedValue(true)
   })
@@ -201,6 +204,20 @@ describe('LessonPage', () => {
       await screen.findByRole('heading', { level: 1, name: 'JSX' })
       expect(screen.queryByRole('region', { name: /progresso/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /concluíd/i })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('comments', () => {
+    it('shows the comments section for the opened lesson', async () => {
+      renderPage('l2')
+      expect(await screen.findByRole('heading', { name: 'Comentários' })).toBeInTheDocument()
+      await waitFor(() => expect(listLessonComments).toHaveBeenCalledWith(expect.anything(), 'l2', null))
+    })
+
+    it('shows the comments section for staff too', async () => {
+      vi.mocked(fetchCourseTree).mockResolvedValue(tree({ isStaff: true }))
+      renderPage('l2')
+      expect(await screen.findByRole('heading', { name: 'Comentários' })).toBeInTheDocument()
     })
   })
 })

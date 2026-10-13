@@ -78,6 +78,25 @@ export function isCourseCompleted(
 
 export const COMMENT_MAX_LENGTH = 2000;
 export const COMMENT_RATE_LIMIT_PER_MINUTE = 10;
+export const COMMENT_PAGE_SIZE = 20;
+
+// Mirrors the rows of app.list_lesson_comments() / app.create_lesson_comment().
+// The author is projected as first name plus a staff flag; no e-mail or user id.
+export interface LessonComment {
+  readonly id: string;
+  readonly authorFirstName: string;
+  readonly isStaffAuthor: boolean;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly isOwn: boolean;
+}
+
+// Keyset cursor (created_at, id), newest first. The server returns up to
+// COMMENT_PAGE_SIZE + 1 rows; the extra row only signals that more exist.
+export interface CommentCursor {
+  readonly createdAt: string;
+  readonly id: string;
+}
 
 export type StudentAreaErrorCode = 'unauthorized' | 'forbidden' | 'rate_limited' | 'invalid_input';
 
