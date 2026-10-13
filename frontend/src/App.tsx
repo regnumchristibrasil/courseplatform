@@ -18,6 +18,7 @@ const AdminCourseCreatePage = lazy(() => import('./features/admin/courses/AdminC
 const AdminCourseDetailPage = lazy(() => import('./features/admin/courses/AdminCourseDetailPage'))
 const AdminCoursesPage = lazy(() => import('./features/admin/courses/AdminCoursesPage'))
 const CoursePage = lazy(() => import('./features/studentArea/CoursePage'))
+const LessonPage = lazy(() => import('./features/studentArea/LessonPage'))
 const MyCoursesPage = lazy(() => import('./features/studentArea/MyCoursesPage'))
 const AdminUsersPage = lazy(() => import('./features/admin/users/AdminUsersPage'))
 
@@ -51,6 +52,14 @@ export function App() {
                     element={
                       <Suspense fallback={<Spinner label="Carregando página..." />}>
                         <CoursePage />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="meus-cursos/:courseId/aulas/:lessonId"
+                    element={
+                      <Suspense fallback={<Spinner label="Carregando página..." />}>
+                        <LessonPage />
                       </Suspense>
                     }
                   />

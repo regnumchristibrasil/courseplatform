@@ -1,0 +1,136 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+}
+
+.player {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.duration {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pagerLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--color-brand);
+  border-radius: 4px;
+  color: var(--color-brand);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.pagerLink:hover {
+  background: var(--color-surface-muted);
+}
+
+.side {
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.sideTitle {
+  margin: 0;
+  padding: 16px;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.lessons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lessonLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--color-line);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.lessonLink:hover {
+  background: var(--color-surface-muted);
+}
+
+.lessonLink[aria-current='page'] {
+  font-weight: 700;
+  color: var(--color-brand-strong);
+  box-shadow: inset 4px 0 0 var(--color-brand);
+}
+
+.lessonTitle {
+  flex: 1;
+}
+
+.lessonDuration {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .main {
+    flex: 1;
+  }
+
+  .side {
+    flex: 0 0 320px;
+  }
+}

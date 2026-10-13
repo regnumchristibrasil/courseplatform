@@ -57,6 +57,26 @@ describe('App student area routes', () => {
     expect(await screen.findByRole('heading', { name: /página não encontrada/i })).toBeInTheDocument()
     expect(fetchCourseTree).toHaveBeenCalledWith(expect.anything(), 'course-9')
   })
+
+  it('renders the lesson page at /meus-cursos/:courseId/aulas/:lessonId and not-found for a lesson outside the tree', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    vi.mocked(fetchCourseTree).mockResolvedValue({
+      courseId: 'course-9',
+      title: 'Curso',
+      description: null,
+      courseStatus: 'published',
+      isStaff: true,
+      totalLessons: 0,
+      completedLessons: 0,
+      progressPercent: 0,
+      totalDurationSeconds: 0,
+      continueLessonId: null,
+      modules: [],
+    })
+    window.history.pushState({}, '', '/meus-cursos/course-9/aulas/ghost')
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: /página não encontrada/i })).toBeInTheDocument()
+  })
 })
 
 describe('App admin routes', () => {

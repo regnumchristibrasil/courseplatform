@@ -10,3 +10,7 @@ export function myCoursesKey(userId: string): readonly ['student', 'my-courses',
 export function courseTreeKey(userId: string, courseId: string): readonly ['student', 'course-tree', string, string] {
   return [...COURSE_TREE_QUERY_KEY, userId, courseId]
 }
+
+export function lessonVideoKey(userId: string, lessonId: string): readonly ['student', 'lesson-video', string, string] {
+  return ['student', 'lesson-video', userId, lessonId]
+}
