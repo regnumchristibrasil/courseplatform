@@ -88,6 +88,66 @@ são auditadas.
 Referência a um vídeo do YouTube ou do Panda, informada como ID ou URL e normalizada.
 A validação confere apenas o formato, não a existência do vídeo.
 
+## Área do aluno
+
+**Aula concluída**  
+Aula que o aluno marcou manualmente como concluída. Não há conclusão automática por
+tempo assistido. Pode ser desmarcada pelo aluno.
+
+**Aula em andamento**  
+Aula que o aluno abriu e ainda não concluiu. Não guarda posição de reprodução.
+
+**Progresso do curso**  
+Percentual de aulas ativas concluídas sobre o total de aulas ativas do curso. Aulas e
+módulos arquivados ficam fora do numerador e do denominador, e não aparecem para o aluno.
+A conclusão registrada é preservada, então desarquivar a aula a restaura.
+
+**Comentário**  
+Texto simples (até 2.000 caracteres, sem formatação) escrito em uma aula. Ordem: mais
+recentes primeiro. O autor pode excluir o próprio comentário; se ele tiver respostas, é
+exibido como "comentário removido". Não há edição, denúncia nem notificação por e-mail.
+
+**Resposta**  
+Comentário filho de outro comentário. Há um único nível: não se responde a uma resposta.
+
+**Equipe**  
+Conjunto dos papéis `tutor`, `admin` e `superadmin`. Lê e escreve comentários em qualquer
+curso e exclui qualquer comentário. Seus comentários exibem o selo "Equipe".
+
+**Participação em comentários**  
+Somente alunos com matrícula válida no curso e a equipe leem e escrevem comentários. Quem
+só tem pré-visualização gratuita não participa. Matrícula expirada perde a participação.
+O autor é exibido pelo primeiro nome.
+
+**Continuar de onde parei**  
+Ação que leva à primeira aula ativa não concluída, na ordem do curso. Com todas as aulas
+concluídas, vira "Revisar curso" e leva à primeira aula.
+
+**Persistência do progresso**  
+O progresso pertence ao aluno e à aula, não à matrícula. Sobrevive a expiração, reembolso e
+recompra, e nunca é zerado automaticamente.
+
+**Meus cursos**  
+Área do aluno com os cursos comprados. Curso com matrícula expirada aparece esmaecido
+("Acesso expirado"), com o progresso visível e, se publicado, a ação "Comprar novamente".
+Curso reembolsado não aparece. Abrir por link direto um curso expirado resulta em página não
+encontrada.
+
+**Moderação de comentários**  
+A equipe pode excluir qualquer comentário. Ao excluir um comentário com respostas, as
+respostas permanecem sob "comentário removido". O sistema guarda quem excluiu e quando, sem
+tabela de auditoria própria.
+
+**Limite de comentários**  
+Cada aluno pode publicar até cerca de 10 comentários ou respostas por minuto. A equipe é
+isenta. Excedido o limite, o aluno vê "Aguarde um instante antes de comentar de novo".
+
+**Fora desta versão (área do aluno)**  
+Avaliação com nota, materiais complementares, capa do curso, descrição da aula, subtítulo do
+módulo, edição e denúncia de comentários, notificações, tempo real e retomada por posição de
+vídeo. Cada um terá ticket próprio. Enquanto não houver capa, os cartões usam um espaço
+reservado 16:9 com a marca.
+
 ## Gestão de acesso
 
 **Usuário ativo (is_active)**  
