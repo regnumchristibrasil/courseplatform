@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchCurrentAccess } from './features/authz/currentAccessApi'
 import { getStaffCourse, listStaffCourses } from './features/admin/courses/api'
 import { listAdminUsers } from './features/admin/users/api'
+import { fetchCourseTree } from './features/studentArea/courseTreeApi'
 import { fetchMyCourses } from './features/studentArea/myCoursesApi'
 import { queryClient } from './lib/queryClient'
 import { App } from './App'
@@ -17,6 +18,7 @@ vi.mock('./features/auth/AuthProvider', async () => {
 })
 vi.mock('./features/authz/currentAccessApi', () => ({ fetchCurrentAccess: vi.fn() }))
 vi.mock('./features/studentArea/myCoursesApi', () => ({ fetchMyCourses: vi.fn() }))
+vi.mock('./features/studentArea/courseTreeApi', () => ({ fetchCourseTree: vi.fn() }))
 vi.mock('./features/admin/courses/api', async (orig) => ({
   ...(await orig<typeof import('./features/admin/courses/api')>()),
   getStaffCourse: vi.fn(),
@@ -45,6 +47,15 @@ describe('App student area routes', () => {
     window.history.pushState({}, '', '/meus-cursos')
     render(<App />)
     expect(await screen.findByRole('heading', { name: 'Meus cursos', level: 1 })).toBeInTheDocument()
+  })
+
+  it('renders the course page at /meus-cursos/:courseId and not-found when the server returns no row', async () => {
+    vi.mocked(fetchCurrentAccess).mockResolvedValue({ role: 'student', isActive: true })
+    vi.mocked(fetchCourseTree).mockResolvedValue(null)
+    window.history.pushState({}, '', '/meus-cursos/course-9')
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: /página não encontrada/i })).toBeInTheDocument()
+    expect(fetchCourseTree).toHaveBeenCalledWith(expect.anything(), 'course-9')
   })
 })
 

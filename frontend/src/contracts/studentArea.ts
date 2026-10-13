@@ -14,6 +14,10 @@ export function myCourseRoute(courseId: string): string {
   return `${STUDENT_AREA_ROUTES.myCourses}/${courseId}`;
 }
 
+export function lessonRoute(courseId: string, lessonId: string): string {
+  return `${myCourseRoute(courseId)}/aulas/${lessonId}`;
+}
+
 // Mirrors the rows of app.my_courses(). Counts are active lessons only
 // (archived lessons and lessons in archived modules are excluded).
 export interface MyCourse {
@@ -30,6 +34,46 @@ export interface MyCourse {
 // Repurchase is only offered for an expired enrollment in a published course.
 export function canRepurchase(course: Pick<MyCourse, 'isExpired' | 'courseStatus'>): boolean {
   return course.isExpired && course.courseStatus === 'published';
+}
+
+export const LESSON_STATES = ['not_started', 'in_progress', 'completed'] as const;
+export type LessonState = (typeof LESSON_STATES)[number];
+
+// Mirrors the single row of app.my_course_tree(course_id): active modules and
+// lessons only, already ordered. The server returns zero rows (never an
+// error) for anyone without access, which the client shows as "not found".
+export interface CourseTreeLesson {
+  readonly id: string;
+  readonly title: string;
+  readonly durationSeconds: number | null;
+  readonly state: LessonState;
+}
+
+export interface CourseTreeModule {
+  readonly id: string;
+  readonly title: string;
+  readonly lessons: readonly CourseTreeLesson[];
+}
+
+export interface CourseTree {
+  readonly courseId: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly courseStatus: MyCourseStatus;
+  readonly isStaff: boolean;
+  readonly totalLessons: number;
+  readonly completedLessons: number;
+  readonly progressPercent: number;
+  readonly totalDurationSeconds: number;
+  readonly continueLessonId: string | null;
+  readonly modules: readonly CourseTreeModule[];
+}
+
+// With everything completed the server points "continue" at the first lesson.
+export function isCourseCompleted(
+  tree: Pick<CourseTree, 'totalLessons' | 'completedLessons'>,
+): boolean {
+  return tree.totalLessons > 0 && tree.completedLessons >= tree.totalLessons;
 }
 
 export const COMMENT_MAX_LENGTH = 2000;
